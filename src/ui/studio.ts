@@ -331,6 +331,20 @@ export function studioScreen(app: App, params?: Record<string, unknown>): Screen
     }
   }
 
+  /** Delete a library song for good (after confirming). An edited bundled song goes back to the original. */
+  async function deleteEntry(e: SongListEntry): Promise<void> {
+    const msg = `Delete "${e.meta.title}" from your library? This removes its audio, charts and samples for good. High scores are kept.`;
+    if (!confirm(msg)) return;
+    try {
+      await app.library.remove(e.meta.id);
+    } catch (err) {
+      console.warn('delete failed', err);
+      return toast(`Could not delete "${e.meta.title}"`, 'bad');
+    }
+    toast(`Deleted "${e.meta.title}"`, 'ok');
+    render(); // rebuild the list (deleting an edited bundled song brings the original back)
+  }
+
   // ─── OPEN ───
   function renderOpen(): void {
     const list = h('div', { class: 'song-rows' }, h('span', { class: 'mute' }, 'Loading…'));
@@ -345,6 +359,8 @@ export function studioScreen(app: App, params?: Record<string, unknown>): Screen
           h('span', { class: 'pill' }, charts.length ? charts.join(' · ') : 'no charts'),
           e.source === 'bundled' ? h('span', { class: 'pill accent' }, 'BUNDLED') : null,
           button('OPEN', () => void openExisting(e), 'small'),
+          // Bundled songs are not in the library, so there is nothing to delete.
+          e.source === 'bundled' ? null : button('DELETE', (ev) => { ev.stopPropagation(); void deleteEntry(e); }, 'small danger'),
         ));
       }
     });
@@ -357,7 +373,7 @@ export function studioScreen(app: App, params?: Record<string, unknown>): Screen
         ),
         h('div', { class: 'panel' },
           h('h2', { class: 'display' }, 'OPEN A SONG'),
-          h('div', { class: 'dim', style: { marginBottom: '12px' } }, 'Change its details, record onto the chart, or fix notes by hand. Saving a bundled song keeps your edited version in the library; remove it from the song list to get the original back.'),
+          h('div', { class: 'dim', style: { marginBottom: '12px' } }, 'Change its details, record onto the chart, or fix notes by hand. Saving a bundled song keeps your edited version in the library; delete that version to get the original back.'),
           list,
         ),
       ),

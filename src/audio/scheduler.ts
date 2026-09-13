@@ -27,9 +27,21 @@ export function createWindowState(): WindowState {
 }
 
 /**
+ * Forget the window but remember which transport segment it belonged to. The next tick rescans from
+ * the *current* position if the transport is still in that segment (new notes / offset / enable while
+ * playing must not replay everything since the segment start), or from the segment start if it moved on.
+ */
+export function resetWindow(state: WindowState): void {
+  state.lastEnd = -Infinity;
+  state.wasPlaying = false;
+}
+
+/**
  * Pure window-advance step. Returns the song-position range to schedule this tick,
- * or null when nothing should be scheduled. `reset` is true when the transport changed
- * segment (play/seek/rate) — callers should cancel pending scheduled hits.
+ * or null when nothing should be scheduled. `reset` is true when the window restarted
+ * (transport changed segment — play/seek/rate — or the caller reset it) — callers should
+ * cancel pending scheduled hits. `nowPos` is the song position at this tick; a reset within
+ * the same segment starts there rather than at `segmentStart`.
  */
 export function nextWindow(
   state: WindowState,
@@ -37,6 +49,7 @@ export function nextWindow(
   generation: number,
   segmentStart: number,
   horizon: number,
+  nowPos = segmentStart,
 ): { from: number; to: number; reset: boolean } | null {
   if (!playing) {
     const wasPlaying = state.wasPlaying;
@@ -45,7 +58,7 @@ export function nextWindow(
   }
   let reset = false;
   if (!state.wasPlaying || generation !== state.generation) {
-    state.lastEnd = segmentStart;
+    state.lastEnd = generation === state.generation ? Math.max(segmentStart, nowPos) : segmentStart;
     state.generation = generation;
     state.wasPlaying = true;
     reset = true;
@@ -79,7 +92,7 @@ export class ChartPlayer {
   setNotes(notes: readonly ScheduledNote[]): void {
     this.notes = [...notes].sort((a, b) => a.time - b.time);
     // Force a resync so the new notes are picked up from the current position.
-    this.state = createWindowState();
+    resetWindow(this.state);
     this.cancelPending();
   }
 
@@ -87,14 +100,14 @@ export class ChartPlayer {
     if (this.enabled === enabled) return;
     this.enabled = enabled;
     if (!enabled) this.cancelPending();
-    else this.state = createWindowState();
+    else resetWindow(this.state);
   }
 
   /** Song audio position = note.time + offset (SongMeta.offset). */
   setOffset(seconds: number): void {
     if (this.offset === seconds) return;
     this.offset = seconds;
-    this.state = createWindowState();
+    resetWindow(this.state);
     this.cancelPending();
   }
 
@@ -104,7 +117,7 @@ export class ChartPlayer {
 
   /** Drop everything scheduled and re-scan from the transport's current position (call after seek/rate change). */
   resync(): void {
-    this.state = createWindowState();
+    resetWindow(this.state);
     this.cancelPending();
     if (this.timer) this.tick();
   }
@@ -129,12 +142,14 @@ export class ChartPlayer {
     const playing = t.playing;
     let horizon = 0;
     let segStart = 0;
+    let nowPos = 0;
     if (playing) {
       const now = this.engine.ctx.currentTime;
       horizon = t.positionAtAudioTime(now + LOOKAHEAD_SECONDS) - this.offset;
       segStart = t.segmentStart - this.offset;
+      nowPos = t.positionAtAudioTime(now) - this.offset;
     }
-    const w = nextWindow(this.state, playing, t.generation, segStart, horizon);
+    const w = nextWindow(this.state, playing, t.generation, segStart, horizon, nowPos);
     if (!w) return;
     if (w.reset) this.cancelPending();
     if (!playing || !this.enabled || w.to <= w.from) return;

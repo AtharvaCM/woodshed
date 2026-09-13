@@ -6,7 +6,7 @@ import type { TempoEvent, TimeSignatureEvent } from '@/types';
 import type { AudioEngine } from './engine';
 import type { Transport } from './transport';
 import { beatsInRange, normalize, tauFor60dB } from './dsp';
-import { LOOKAHEAD_SECONDS, TICK_MS, createWindowState, nextWindow, type WindowState } from './scheduler';
+import { LOOKAHEAD_SECONDS, TICK_MS, createWindowState, nextWindow, resetWindow, type WindowState } from './scheduler';
 
 const CLICK_RATE = 44100;
 
@@ -73,7 +73,7 @@ export class Metronome {
 
   /** Drop scheduled clicks and re-scan from the transport's current position (call after seek/rate change). */
   resync(): void {
-    this.state = createWindowState();
+    resetWindow(this.state);
     this.cancelPending();
     if (this.timer) this.tick();
   }
@@ -82,13 +82,13 @@ export class Metronome {
     this.tempoMap = tempoMap.length ? tempoMap : [{ tick: 0, time: 0, bpm: 120 }];
     this.ppq = ppq;
     this.timeSignatures = timeSignatures.length ? timeSignatures : [{ tick: 0, numerator: 4, denominator: 4 }];
-    this.state = createWindowState();
+    resetWindow(this.state);
   }
 
   /** Song audio position = chart time + offset. */
   setOffset(seconds: number): void {
     this.offset = seconds;
-    this.state = createWindowState();
+    resetWindow(this.state);
   }
 
   setVolume(v: number): void {
@@ -100,7 +100,7 @@ export class Metronome {
     if (this.enabled === enabled) return;
     this.enabled = enabled;
     if (!enabled) this.cancelPending();
-    else this.state = createWindowState();
+    else resetWindow(this.state);
   }
 
   start(): void {
@@ -151,12 +151,14 @@ export class Metronome {
     const playing = t.playing;
     let horizon = 0;
     let segStart = 0;
+    let nowPos = 0;
     if (playing) {
       const now = this.engine.ctx.currentTime;
       horizon = t.positionAtAudioTime(now + LOOKAHEAD_SECONDS) - this.offset;
       segStart = t.segmentStart - this.offset;
+      nowPos = t.positionAtAudioTime(now) - this.offset;
     }
-    const w = nextWindow(this.state, playing, t.generation, segStart, horizon);
+    const w = nextWindow(this.state, playing, t.generation, segStart, horizon, nowPos);
     if (!w) return;
     if (w.reset) this.cancelPending();
     if (!playing || !this.enabled || w.to <= w.from) return;
