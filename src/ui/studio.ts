@@ -1,7 +1,7 @@
 import type { App, Screen } from '@/app';
 import { DIFFICULTIES, DRUM_VOICES, VOICE_LABELS, type Chart, type Difficulty, type SongListEntry, type SongPackage } from '@/types';
 import { chartToMidi, writeMidi, constantTempoMap, DEFAULT_PPQ } from '@/midi';
-import { createSongPackage, exportSongZip, slugify, fileExtension, SAMPLE_EXTENSIONS, AUDIO_EXTENSIONS, DRUMS_AUDIO_BASENAME, playableDifficulties } from '@/song';
+import { createSongPackage, exportSongZip, loadSongFromZip, slugify, fileExtension, SAMPLE_EXTENSIONS, AUDIO_EXTENSIONS, DRUMS_AUDIO_BASENAME, playableDifficulties } from '@/song';
 import { Transport, Metronome } from '@/audio';
 import { h, button, field, toast, clear, downloadBlob, pickFile, fmtTime, modal, loadingModal } from './dom';
 import { topbar } from './topbar';
@@ -345,6 +345,22 @@ export function studioScreen(app: App, params?: Record<string, unknown>): Screen
     render(); // rebuild the list (deleting an edited bundled song brings the original back)
   }
 
+  /** Import a song zip (as exported by DOWNLOAD SONG ZIP) into the library and open it. */
+  async function importZip(): Promise<void> {
+    const [file] = await pickFile('.zip,application/zip');
+    if (!file) return;
+    let pkg: SongPackage;
+    try {
+      pkg = await loadSongFromZip(file);
+    } catch (err) {
+      return toast(`${file.name}: ${(err as Error).message}`, 'bad');
+    }
+    if (await app.library.has(pkg.meta.id) && !confirm(`"${pkg.meta.title}" is already in your library. Replace it with the one in ${file.name}?`)) return;
+    const entry = await app.library.import(pkg);
+    toast(`Imported "${pkg.meta.title}"`, 'ok');
+    await openExisting(entry);
+  }
+
   // ─── OPEN ───
   function renderOpen(): void {
     const list = h('div', { class: 'song-rows' }, h('span', { class: 'mute' }, 'Loading…'));
@@ -370,6 +386,8 @@ export function studioScreen(app: App, params?: Record<string, unknown>): Screen
           h('h2', { class: 'display' }, 'NEW SONG'),
           h('div', { class: 'dim' }, 'Start from an audio file: a full mix WITHOUT drums (mp3, wav, flac, aac, m4a, ogg). Set the tempo and offset, then record the drum part on your pads or draw it in the chart editor. The game plays your drum samples on top. A second mix WITH drums can be added on the SONG tab as a reference for the editor.'),
           h('div', { class: 'btn-row', style: { marginTop: '16px' } }, button('CHOOSE AUDIO FILE', () => void newFromAudio(), 'primary big')),
+          h('div', { class: 'dim', style: { marginTop: '20px' } }, 'Or bring back a song zip (DOWNLOAD SONG ZIP on the SONG tab): it goes into your library and opens here.'),
+          h('div', { class: 'btn-row', style: { marginTop: '10px' } }, button('IMPORT SONG ZIP', () => void importZip(), 'big')),
         ),
         h('div', { class: 'panel' },
           h('h2', { class: 'display' }, 'OPEN A SONG'),
