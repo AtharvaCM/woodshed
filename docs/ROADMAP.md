@@ -12,9 +12,9 @@ Songs-first. Every phase ends with something playable on the TD-07.
 
 ## Phase 1 — Labon Ko playable
 
-- [ ] Drum stem + drumless mix from your own audio (`demucs-mlx -n htdemucs_ft`, `demucs --two-stems=drums`).
-- [ ] Stem → MIDI (`drum2midi --from-song` or `adtof --audio drums.wav`). Cross-check against Songsterr tab 2680219 (108 BPM, 4/4, 153 bars).
-- [ ] Song folder by hand: `song.json` + drumless mix + the MIDI as `expert.mid` (see docs/SONG-FORMAT.md), zip, drag onto the song list. Studio → open it, set the offset on the first downbeat, fix the chart by ear. Core groove: kick 1 · a-of-1 · &-of-4, snare 2 · 4, hats 8ths.
+- [x] Drum stem + drumless mix from your own audio. (2026-09-28: purchased iTunes AAC → `demucs-mlx -n htdemucs_ft` took 6 min on the M4 for 5:41; drumless mix = ffmpeg `amix` of bass+other+vocals, no second demucs run needed.)
+- [x] Stem → MIDI. (2026-09-28: `adtof` on the stem, 13 s, 3,061 notes; drum2midi needed `pip install audioread` on macOS. Grid verified from the hats: exactly 108.000 BPM, flat to ±9 ms over 143 bars; song bar 1 at 0.511 s, drums enter at bar 9 = 18.289 s. See docs/research.md §4a.)
+- [x] Song folder: `scripts/transcription-to-song.py` builds folder + zip from a transcription MIDI (tempo map pinned, chart tick 0 on the song's first downbeat). Imported into the library 2026-09-28. Next: play it, fix the chart by ear in the editor.
 - [ ] Practice ladder: 60 % → 80 % → 100 %, loop the hook, then the 2:37 film-edit form end to end.
 
 ## Phase 2 — chart pipeline in the repo

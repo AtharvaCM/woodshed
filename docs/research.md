@@ -85,6 +85,16 @@ Toms 48/45/43, ride bow 51, ride edge 59, crash bow 49 confirmed earlier in the 
 - Rock-cover arrangement refs: Project Rubaab (eL5jwMUAbbc, 5:08), The Raga Projekt (tAHBXqgCMZY, 4:14), Abhishek Music Academy (CCzdSsPEz5o), Khudgharz KK medley "Kya Mujhe Pyar Hai × Tu Hi Meri Shab Hai × Labon Ko" (xrM4afyLXxQ, 61M views). KK died 31 May 2022; 2026 covers are framed as tributes.
 - Practice ladder: (1) kick/snare/hat groove at 60 BPM; (2) 80 → 108 with click; (3) crash on section downbeats + one 6-note fill into hooks; (4) full 2:37 edit; (5) full 5:41.
 
+### 4a. Measured from the actual recording (2026-09-28, purchased album version, 341.08 s)
+
+- **Tempo 108.000 BPM exactly**; hi-hat 16ths sit on a constant grid to within ±9 ms across all 143 drum bars. (librosa's beat tracker said 107.67; that was a wrap-around artefact of fitting to an 8th grid.)
+- **Song bar 1 downbeat at 0.511 s** (silence; guitar riff enters as a pickup at 2.49 s). **Drums enter at bar 9 = 18.289 s** with a crash.
+- **Hats are 16ths**, not 8ths (≈16 per bar, ~1,987 in the song). Songsterr's 8th-note hat was wrong.
+- **Kick pattern** (16th slots, 0 = beat 1): 0, 3, 6, 7, 10, 14 → beat 1, "a" of 1, "&" and "a" of 2, "&" of 3, "&" of 4. **Snare** on 2 and 4 (slots 4, 12) with a frequent ghost on the "a" of 1 (slot 3).
+- Bass loops Am → G → F → F (4-bar cycle from bar 10). Drums drop out completely for two bars at song bars 21–22 and thin to kick-only at bars 77–80 (interlude).
+- ADTOF alone gives 5 classes, flat velocity 100, 8 crashes, no open hats, no ride. drum2midi adds those; pending.
+- Pipeline timing on the M4 (base): demucs-mlx htdemucs_ft 6 min for 5:41 (much slower than the M4 Max benchmark); adtof 13 s; song folder + zip instant.
+
 ### Next Hindi songs (SongBPM-verified unless marked ~)
 Kabhi Kabhi Aditi 95 · Tum Se Hi 130 · Yaaron 114 · Aankhon Mein Teri ~118 · Kya Mujhe Pyaar Hai 118 · Rock On!! 113 / Tum Ho Toh 112 · Tu Hi Meri Shab Hai 119 (A minor, same key) · Khuda Jaane 79 (dynamics) · Maeri 83 · Aahatein 141 · But It Rained ~130 · Bandeh 135 · Saadda Haq 97 · Manja 106 in 3/4 (first non-4/4).
 
