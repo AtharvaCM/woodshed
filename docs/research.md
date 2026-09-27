@@ -93,6 +93,7 @@ Toms 48/45/43, ride bow 51, ride edge 59, crash bow 49 confirmed earlier in the 
 - **Kick pattern** (16th slots, 0 = beat 1): 0, 3, 6, 7, 10, 14 → beat 1, "a" of 1, "&" and "a" of 2, "&" of 3, "&" of 4. **Snare** on 2 and 4 (slots 4, 12) with a frequent ghost on the "a" of 1 (slot 3).
 - Bass loops Am → G → F → F (4-bar cycle from bar 10). Drums drop out completely for two bars at song bars 21–22 and thin to kick-only at bars 77–80 (interlude).
 - ADTOF alone gives 5 classes, flat velocity 100, 8 crashes, no open hats, no ride. drum2midi adds those; pending.
+- **ADTOF onsets lead the real transients**: kick +14 ms, snare +26 ms, hats +32 ms (median, vs band-limited onset detection on the stem). The song offset was raised 0.511 → 0.539 to compensate. Stems from demucs-mlx are sample-aligned with the original (lag 0.2 ms).
 - Pipeline timing on the M4 (base): demucs-mlx htdemucs_ft 6 min for 5:41 (much slower than the M4 Max benchmark); adtof 13 s; song folder + zip instant.
 
 ### Next Hindi songs (SongBPM-verified unless marked ~)
