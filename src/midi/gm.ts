@@ -31,6 +31,9 @@ const NOTE_TO_VOICE: ReadonlyMap<number, DrumVoice> = new Map<number, DrumVoice>
   [42, 'hihatClosed'], // Closed Hi-Hat
   [44, 'hihatClosed'], // Pedal Hi-Hat
   [46, 'hihatOpen'], // Open Hi-Hat
+  // Roland V-Drums hi-hat edge zones — unassigned in GM, sent by the TD-07/17/27 at their factory map.
+  [22, 'hihatClosed'], // Closed Hi-Hat edge (Roland)
+  [26, 'hihatOpen'], // Open Hi-Hat edge (Roland)
   [51, 'ride'], // Ride Cymbal 1
   [53, 'ride'], // Ride Bell
   [59, 'ride'], // Ride Cymbal 2
@@ -75,8 +78,10 @@ export function noteForVoice(voice: DrumVoice): number {
 
 // ─────────────────────────── GM names ───────────────────────────
 
-/** Standard General MIDI percussion names for notes 35–81 (for the device wizard). */
+/** Standard General MIDI percussion names for notes 35–81, plus the Roland hi-hat edge notes (for the device wizard). */
 export const GM_DRUM_NAMES: Record<number, string> = {
+  22: 'Closed Hi-Hat Edge (Roland)',
+  26: 'Open Hi-Hat Edge (Roland)',
   35: 'Acoustic Bass Drum',
   36: 'Bass Drum 1',
   37: 'Side Stick',
@@ -137,7 +142,7 @@ export function gmDrumName(note: number): string {
 
 /** A factory binding set for a known family of MIDI controllers. */
 export interface DevicePreset {
-  /** Stable id (`gm`, `fgdp`, `mpc`). */
+  /** Stable id (`roland-td`, `fgdp`, `mpc`, `gm`). */
   id: string;
   /** Display name. */
   name: string;
@@ -163,6 +168,32 @@ export function makeBindings(
   }
   return out;
 }
+
+/**
+ * Roland V-Drums modules (TD-07 / TD-17 / TD-27 …) at their factory MIDI note map
+ * (Roland KB "TD-07KV: Default MIDI Note Map"). The module chooses the open or closed
+ * hi-hat note itself from the pedal position (CC#4), so the open/closed split works
+ * without reading controllers. The pedal "chick" (44) counts as a closed hat; unbind it
+ * in Pad Setup if foot-chicks cause overhits. Tom rims 50/47 exist on TD-17/27 kits and
+ * on the TD-07KX/KVX; the DMK/KV toms are single-zone. The ride bell (53) needs a 3-zone
+ * ride (KVX). Tom 3 rim (58) is left out because GM calls 58 Vibraslap.
+ */
+export const ROLAND_TD_PRESET: DevicePreset = {
+  id: 'roland-td',
+  name: 'Roland V-Drums (TD-07 / TD-17 / TD-27)',
+  match: /Roland|\bTD-?\d{1,2}[A-Z]?\b/i, // TD-07, TD-17, TD-27, TD-50X …
+  bindings: makeBindings({
+    kick: [36],
+    snare: [38, 40, 37], // head, rim, cross-stick
+    tomHigh: [48, 50], // tom 1 head, rim
+    tomMid: [45, 47], // tom 2 head, rim
+    tomLow: [43], // tom 3 head
+    hihatClosed: [42, 22, 44], // bow, edge, pedal
+    hihatOpen: [46, 26], // bow, edge
+    ride: [51, 59, 53], // bow, edge, bell
+    crash: [49, 55, 57, 52], // crash 1 bow/edge, crash 2 bow/edge
+  }),
+};
 
 /** Generic General MIDI preset (all GM alternates, any channel). */
 export const GM_PRESET: DevicePreset = {
@@ -219,7 +250,7 @@ export const MPC_PRESET: DevicePreset = {
 };
 
 /** All factory presets, most specific first. {@link findPreset} falls back to `gm`. */
-export const DEVICE_PRESETS: readonly DevicePreset[] = [FGDP_PRESET, MPC_PRESET, GM_PRESET];
+export const DEVICE_PRESETS: readonly DevicePreset[] = [ROLAND_TD_PRESET, FGDP_PRESET, MPC_PRESET, GM_PRESET];
 
 /**
  * Pick the preset whose `match` pattern matches a MIDI port name.

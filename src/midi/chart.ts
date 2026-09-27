@@ -214,7 +214,7 @@ export function chartFromMidi(midi: MidiFile, opts: ChartFromMidiOptions): Chart
 
 /** Options for {@link chartToMidi}. */
 export interface ChartToMidiOptions {
-  /** Name written to the tempo track (default `DRUMKILLER`). */
+  /** Name written to the tempo track (default `WOODSHED`). */
   trackName?: string;
   /** Note length in ticks (default `ppq / 8`, at least 1). */
   noteLength?: number;
@@ -234,7 +234,7 @@ export function chartToMidi(chart: Chart, opts: ChartToMidiOptions = {}): MidiFi
   const ppq = Number.isFinite(chart.ppq) && chart.ppq > 0 ? Math.round(chart.ppq) : DEFAULT_PPQ;
   const channel = Math.min(15, Math.max(0, Math.round(opts.channel ?? 9)));
   const noteLength = Math.max(1, Math.round(opts.noteLength ?? ppq / 8));
-  const trackName = opts.trackName ?? 'DRUMKILLER';
+  const trackName = opts.trackName ?? 'WOODSHED';
 
   const metaEvents: MidiEvent[] = [{ type: 'trackName', tick: 0, text: trackName }];
   for (const t of chart.tempoMap) {

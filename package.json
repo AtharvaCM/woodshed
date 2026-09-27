@@ -1,9 +1,9 @@
 {
-  "name": "drumkiller",
+  "name": "woodshed",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "DRUMKILLER \u2014 a finger-drumming rhythm game for MIDI pads (4x4 pads, Yamaha FGDP-30/50) that runs in the browser.",
+  "description": "WOODSHED — a browser practice room for e-drummers (Roland TD-07 first): play songs on a highway, build charts from any track, loop the hard bars. Forked from DRUMKILLER.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

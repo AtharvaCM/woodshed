@@ -253,7 +253,7 @@ export function settingsScreen(app: App): Screen {
           ...videoPanel,
           h('h3', null, 'Data'),
           h('div', { class: 'btn-row' },
-            button('EXPORT SCORES', () => downloadBlob(new Blob([app.scores.exportJson()], { type: 'application/json' }), 'drumkiller-scores.json')),
+            button('EXPORT SCORES', () => downloadBlob(new Blob([app.scores.exportJson()], { type: 'application/json' }), 'woodshed-scores.json')),
             button('IMPORT SCORES', async () => { const [f] = await pickFile('.json'); if (!f) return; const r = app.scores.importJson(await f.text()); toast(`Imported ${r.imported} scores`, 'ok'); }),
             button('RESET ALL SCORES', () => { if (confirm('Delete ALL high scores?')) { app.scores.clear(); toast('Scores cleared'); } }, 'danger'),
             button('RESET SETTINGS', () => { app.settingsStore.reset(); app.navigate('settings'); }, 'danger'),

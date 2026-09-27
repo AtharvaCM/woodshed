@@ -42,8 +42,8 @@ export function titleScreen(app: App): Screen {
       h(
         'div',
         { class: 'title-wrap' },
-        h('h1', { class: 'logo' }, h('span', { class: 'a' }, 'DRUMKILLER'), h('span', { class: 'b' }, 'FINGER DRUM ARCADE')),
-        h('div', { class: 'tagline' }, 'plug in your pads · hit the notes · burn the highway'),
+        h('h1', { class: 'logo' }, h('span', { class: 'a' }, 'WOODSHED'), h('span', { class: 'b' }, 'E-DRUM PRACTICE ROOM')),
+        h('div', { class: 'tagline' }, 'plug in the kit · loop the hard bars · own the song'),
         h(
           'div',
           { class: 'menu' },
@@ -54,7 +54,7 @@ export function titleScreen(app: App): Screen {
           menuItem('SETTINGS', 'latency, volumes, keys', 'settings'),
         ),
         status,
-        h('div', { class: 'small mute' }, 'Works with any MIDI pad controller (4×4 pads, Yamaha FGDP-30/50, e-kits). Chrome or Edge recommended.'),
+        h('div', { class: 'small mute' }, 'Built for the Roland TD-07 and other USB-MIDI e-kits; pad controllers work too. Chrome or Edge required (Web MIDI).'),
       ),
     ),
   );

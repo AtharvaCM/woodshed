@@ -5,7 +5,7 @@ export function topbar(app: App, title: string, ...right: (HTMLElement | null)[]
   return h(
     'div',
     { class: 'topbar' },
-    h('a', { class: 'brand', onClick: () => app.navigate('title') }, 'DRUMKILLER'),
+    h('a', { class: 'brand', onClick: () => app.navigate('title') }, 'WOODSHED'),
     h('h1', null, title),
     h('div', { class: 'spacer' }),
     ...right,

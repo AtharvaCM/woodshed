@@ -20,6 +20,12 @@ describe('gm mapping', () => {
     expect(voiceForNote(0)).toBeNull();
   });
 
+  it('maps Roland hi-hat edge zones onto the hat voices', () => {
+    expect(voiceForNote(22)).toBe('hihatClosed');
+    expect(voiceForNote(26)).toBe('hihatOpen');
+    expect(GM_DRUM_NAMES[22]).toContain('Roland');
+  });
+
   it('canonical notes round-trip through voiceForNote', () => {
     for (const v of DRUM_VOICES) expect(voiceForNote(noteForVoice(v))).toBe(v);
     expect(noteForVoice('kick')).toBe(36);
@@ -38,6 +44,13 @@ describe('gm mapping', () => {
         for (const b of p.bindings[v]) expect(voiceForNote(b.note)).toBe(v);
       }
     }
+    expect(findPreset('TD-07').id).toBe('roland-td');
+    expect(findPreset('TD-17 MIDI 1').id).toBe('roland-td');
+    expect(findPreset('Roland TD-27').id).toBe('roland-td');
+    expect(findPreset('TD-50X MIDI 1').id).toBe('roland-td');
+    expect(findPreset('TD-07').bindings.hihatClosed.map((b) => b.note)).toEqual([42, 22, 44]);
+    expect(findPreset('TD-07').bindings.hihatOpen.map((b) => b.note)).toEqual([46, 26]);
+    expect(findPreset('TD-07').bindings.crash.map((b) => b.note)).toEqual([49, 55, 57, 52]);
     expect(findPreset('FGDP-50').id).toBe('fgdp');
     expect(findPreset('Akai MPD218').id).toBe('mpc');
     expect(findPreset('Launchpad X LPX MIDI').id).toBe('mpc');

@@ -55,7 +55,7 @@ export function resultsScreen(app: App, params?: Record<string, unknown>): Scree
     videoUrl = URL.createObjectURL(video.blob);
     const ext = fileExtensionFor(video.mimeType);
     const safe = (t: string) => t.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'song';
-    const filename = `drumkiller-${safe(pkg.meta.title)}-${difficulty}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}.${ext}`;
+    const filename = `woodshed-${safe(pkg.meta.title)}-${difficulty}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}.${ext}`;
     const mb = (video.blob.size / 1_048_576).toFixed(1);
     videoSlot.replaceChildren(h('div', { class: 'video-box', style: { marginTop: '24px' } },
       h('video', { src: videoUrl, controls: true, playsInline: true, preload: 'metadata' }),

@@ -1,80 +1,69 @@
-# DRUMKILLER
+# WOODSHED
 
-**Play it now: https://sam1am.github.io/drumkiller/**
+A browser practice room for e-drummers. Plug a Roland TD-07 (or any USB-MIDI kit) into Chrome, pick a song, and play it on a Guitar-Hero-style highway that scores every hit. Slow the hard bars down, loop them, then take the full run. Build charts for songs nobody has charted, starting with Hindi/Bollywood tracks.
 
-A finger-drumming rhythm game in the spirit of Guitar Hero — for MIDI pad controllers (4×4 pads, Yamaha FGDP-30/50, e-kits) — that runs in the browser on Mac, Linux, and Windows.
+*Woodshed* is jazz slang for practising hard, alone, until it sits.
+
+**Status:** day 0. Forked from [DRUMKILLER](https://github.com/sam1am/drumkiller) by sam1am (MIT), rebranded, with a Roland V-Drums preset added. Everything DRUMKILLER does still works; see [docs/ROADMAP.md](docs/ROADMAP.md) for what comes next and [docs/research.md](docs/research.md) for the verified facts behind the plan.
 
 ```
 npm install
-npm run dev        # http://localhost:5173
+npm run dev        # http://localhost:5173  (open in Chrome or Edge)
 npm test           # unit tests
-npm run build      # static build in dist/ — host anywhere
+npm run typecheck
+npm run build      # static build in dist/
 ```
 
-Use **Chrome or Edge** (Web MIDI). Firefox 108+ also works. Safari has no Web MIDI; the keyboard fallback still works there.
+Safari has no Web MIDI. Chrome 124+ asks for MIDI permission on first use; allow it.
 
-## What it does
+## Connect a Roland TD-07
 
-- **Six drum tracks on a 3D highway**: hi-hat (closed ✕ / open ◯ symbols), snare, kick, toms (high/mid/low as sub-positions in one lane), ride, and crash as a full-width horizontal bar.
-- **Four difficulties** per song: easy, medium, hard, expert. If a song folder only ships an `expert.mid`, the easier charts are derived automatically with musical rules (ghost notes go first, hats thin to 8ths → quarters, fills collapse to their last hit, and so on).
-- **Scoring**: perfect/great/good hit windows, combo multiplier up to 4×, overhit penalty, star rating, full-combo badge, per-song per-difficulty leaderboards (top 25) saved locally, exportable as JSON.
-- **Practice mode**: 50–125% speed, A/B looping, seek, optional guide drums. Scores are never saved.
-- **Studio (song editor)**: create a song from any drum-less mix (mp3/wav/flac/aac/m4a/ogg) or open one from your library, then work on it in three tabs. **SONG**: title/artist, tap tempo, set the offset by hitting a pad on the first downbeat or by pressing **BEAT 1 HERE** while the song plays, custom drum samples, and **REPLACE AUDIO** to swap the mix without touching the charts (program against a mix with drums, ship the drum-less one). **RECORD**: play a take with count-in + metronome, **quantize** it (1/4 … 1/32, triplets, strength, swing, double-hit merge) with live preview and write it to any difficulty. **CHART**: the piano-roll note editor. **Save** writes the song to your library, **Save as** saves a copy under a new title. Export the chart as standard **MIDI** (GM drum notes on channel 10) to polish in a DAW, or download the whole **song folder as a zip**.
-- **Song folders**: everything for a song lives in one folder — `song.json`, the audio, one MIDI per difficulty, optional custom drum samples and artwork. Zip it and share it. Drag a zip onto the song list to import. See [docs/SONG-FORMAT.md](docs/SONG-FORMAT.md).
-- **Pad Setup wizard**: walks through kick, snare, toms, hats, ride, crash and asks you to hit the pad(s) for each. Saved per MIDI device. Presets for FGDP-30/50, generic 4×4 pads (MPD/MPK/Launchpad/…), and General MIDI.
-- **Built-in drum kit**: synthesized at startup (no downloads); any song can override any drum with its own samples.
-- **Latency calibration** in Settings, plus a keyboard fallback so you can play with no hardware.
-- **Performance video**: turn on *Record my performances* in Settings and every play/practice take is recorded in the browser — you on the left and the highway on the right, side by side, with the live HUD, and the game audio (optionally your mic). The results screen shows the video with a **SAVE VIDEO** button. It is plain WebM from `MediaRecorder`, so nothing leaves your machine and the site stays static. 720p is the default; 1080p costs more CPU.
+1. USB-C → **USB-B, USB 2.0** cable (the manual says USB 3.0 cables do not work). Not in the box.
+2. Leave the module on its default `SETUP > SYSTEM > USBDrv = GENERIC`. That is class-compliant MIDI: no driver, and Chrome sees it the moment you plug in.
+3. Open the app, click the MIDI pill on the title screen, allow access. The port name contains `TD-07`, so the **Roland V-Drums** preset loads automatically (kick 36, snare 38/40/37, toms 48/45/43, hats 42/22/44 closed and 46/26 open, ride 51/59/53, crashes 49/55/57/52).
+4. **PAD SETUP** shows a MIDI monitor. Hit every pad once: each hit should light up a drum chip, and the monitor line should not say "(ignored)" (that means the hardware timestamp was rejected and arrival time is being used instead). Unbind note 44 (hi-hat pedal) there if foot-chicks cause overhits on songs that don't chart them.
+5. **SETTINGS → Run calibration** once, wired headphones on. Bluetooth headphones add 40–300 ms and will wreck timing.
 
-## Chart editor
+Only one program can own a MIDI port. Close Clone Hero, GarageBand or any other MIDI app before playing here, and vice versa.
 
-Studio → open a song → **CHART** tab is a piano-roll editor: one row per drum over the song's waveform and beat grid. Click to add a note, drag to move it (across rows to change the drum), shift-drag for marquee selection, right-click to delete, ⌘Z/⇧⌘Z undo/redo, ⌘D duplicate a bar later, arrow keys nudge on the snap grid, velocity slider, snap grid from 1/4 to 1/32 and triplets, ⌘+wheel to zoom. Space plays the song with your drum samples; while playing, pad hits insert notes at the playhead. Each row has **M** / **S** buttons to mute or solo that drum, and **SONG** mutes the backing audio so you hear the drums alone. Switching difficulty keeps your edits; **SAVE** (⌘S) writes every edited `<difficulty>.mid` back into the song folder in your library. **DELETE … CHART** removes a difficulty's file (with confirmation) so it goes back to being auto-generated; a chart you empty out is dropped the same way, and players are only offered difficulties up to the hardest real chart. **EXPORT MIDI** downloads the current chart, **DOWNLOAD SONG ZIP** on the SONG tab the whole folder.
+Switch `USBDrv` to `VENDOR` and install Roland's driver only when you want the module's audio over USB (for recording). Flip back to `GENERIC` for practice.
 
-## Keyboard fallback
+## What it does today
 
-| Key | Drum |
-| --- | --- |
-| Space / B | kick |
-| F / J | snare |
-| D | hi-hat closed |
-| S | hi-hat open |
-| G / H / K | tom high / mid / low |
-| L | ride |
-| A / ; | crash |
+- **Highway**: hi-hat, snare, kick, toms, ride lanes and a full-width crash bar. Four difficulties per song; easier charts derive automatically from the hardest one.
+- **Scoring**: perfect/great/good windows (scaled by *Hit window size* in Settings), combo, stars, full-combo badge, local leaderboards.
+- **Practice mode**: 50–125 % speed, A/B loop, seek, guide drums. Nothing is saved.
+- **Studio**: turn any audio file into a song. Tap tempo, set the downbeat offset, then record a take on the kit with count-in and click, quantize it (1/4…1/32, triplets, strength, double-hit merge), and polish it in the piano-roll chart editor. Export as standard MIDI (GM drums, channel 10) or as a song-folder zip. There is no MIDI *import* button yet; a chart made elsewhere goes in as `expert.mid` inside a song folder (see below).
+- **Song folders**: `song.json` + audio + one MIDI per difficulty + optional samples/artwork. Drag a zip onto the song list to import. Format: [docs/SONG-FORMAT.md](docs/SONG-FORMAT.md).
+- **Pad Setup wizard**: per-device bindings, presets for Roland V-Drums, Yamaha FGDP, generic 4×4 pads and General MIDI, live MIDI monitor with timestamp health.
+- **Performance video**: record webcam + highway + HUD in the browser (WebM). Handy for cover-video takes.
+- **Keyboard fallback** so the app runs with no hardware: `Space`/`B` kick, `F`/`J` snare, `D` hat closed, `S` hat open, `G`/`H`/`K` toms high/mid/low, `L` ride, `A`/`;` crash.
 
-`Esc` pauses. `[` / `]` nudge the input offset by 10 ms while playing.
+## Getting a song in
 
-## Timing feels off?
+Only DRUMKILLER's two synthesized demo songs are bundled. The intended pipeline for a real track with no existing chart:
 
-- The HUD shows your average timing error live ("+120ms LATE"), and stray hits show how far they were from the nearest note.
-- Pause (`Esc`) → **AUTO-FIX OFFSET** sets the input offset from what you have played so far. The results screen offers the same.
-- Settings → **Hit window size** scales the perfect/great/good windows (default 1.5×; presets from TIGHT to VERY LOOSE), and **Strict drums** can be turned off so any drum on the same lane counts.
-- Settings → **Run calibration** for a click-based measurement. Pad Setup's MIDI monitor shows each event's timestamp skew; if a device reports timestamps in the wrong clock domain the game falls back to arrival time automatically.
+1. Your own audio file of the song.
+2. Stem separation on the Mac: `demucs-mlx` for the drum stem (seconds on Apple Silicon), upstream `demucs --two-stems=drums` for a drumless backing track.
+3. Drum stem → MIDI with `drum2midi` or `ADTOF-pytorch`.
+4. Make a song folder: `song.json` (title, bpm, offset, `audio`, `charts.expert`), the drumless mix, and the MIDI saved as `expert.mid`. Zip it and drag the zip onto the song list. Then **STUDIO → open it** and fix the chart by ear in the editor. Format: [docs/SONG-FORMAT.md](docs/SONG-FORMAT.md).
+
+Details, tool versions and caveats: [docs/research.md](docs/research.md) §3. Automating steps 2–4 (and a MIDI import button in the Studio) is on the roadmap.
 
 ## Project layout
 
 ```
-src/types.ts      shared data contracts (chart, song.json schema, device config, settings)
-src/midi/         SMF parser/writer, GM drum map + device presets, chart<->MIDI, quantizer, difficulty derivation
-src/audio/        AudioEngine, Transport (variable-rate playback), synthesized DrumKit, ChartPlayer, Metronome, WAV codec
-src/song/         song folder/zip packaging, IndexedDB library, bundled-song discovery
-src/store/        high scores, device configs, settings (localStorage)
+src/types.ts      shared data contracts (chart, song.json, device config, settings)
+src/midi/         SMF parser/writer, GM drum map + device presets (Roland V-Drums lives in gm.ts), chart<->MIDI, quantizer, difficulty derivation
+src/audio/        AudioEngine, Transport, synthesized DrumKit, ChartPlayer, Metronome
+src/song/         song folder/zip packaging, IndexedDB library
+src/store/        scores, device configs, settings (localStorage)
 src/input/        Web MIDI + keyboard → unified hit stream
-src/game/         Judge (scoring), HighwayRenderer (canvas), GameSession (ties it together)
+src/game/         Judge (scoring), HighwayRenderer, GameSession, video recorder
 src/ui/           screens: title, song select, game, results, pad wizard, studio, settings
-scripts/          make-demo-song.mjs — generates the two bundled demo songs (audio + charts) from scratch
-public/songs/     bundled songs (index.json lists folder names)
-docs/SONG-FORMAT.md
+docs/             SONG-FORMAT.md, ROADMAP.md, research.md
 ```
 
-## Deploying
+## Credits and license
 
-Pushes to `main` run `.github/workflows/pages.yml`, which runs the tests, builds the game, and publishes `docs/` (landing page) plus the build under `/play` to GitHub Pages.
-
-## Adding songs
-
-1. Put a folder in `public/songs/<slug>/` with `song.json`, the audio, and `expert.mid` (see the format doc), and add the slug to `public/songs/index.json`. Or:
-2. Import a zip / folder from the song list (stored in the browser's IndexedDB). Or:
-3. Make one in the Studio.
-
-Regenerate the demo songs with `npm run demo-song`.
+Forked from **DRUMKILLER** by sam1am, MIT licensed. The original copyright notice is kept in [LICENSE](LICENSE); WOODSHED's changes are under the same license.

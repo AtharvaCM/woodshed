@@ -74,7 +74,7 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: URL });
   await sleep(2000);
-  assert((await evaluate(`document.querySelector('.logo')?.textContent`))?.includes('DRUMKILLER'), 'title screen renders');
+  assert((await evaluate(`document.querySelector('.logo')?.textContent`))?.includes('WOODSHED'), 'title screen renders');
   await shot('01-title.png');
   await click('PLAYpick a song, chase the high score');
   await sleep(2500);

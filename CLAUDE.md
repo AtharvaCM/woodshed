@@ -1,13 +1,23 @@
-# DRUMKILLER — notes for contributors
+# WOODSHED — notes for contributors
 
-Browser rhythm game for MIDI finger-drum pads. Vite + TypeScript, no UI framework, Canvas 2D highway, Web MIDI + Web Audio.
+Browser practice room for e-drummers, Roland TD-07KV first. Forked from DRUMKILLER (sam1am, MIT) on 2026-09-27; upstream remote is `upstream`. Vite + TypeScript, no UI framework, Canvas 2D highway, Web MIDI + Web Audio.
 
-- `npm run dev` / `npm test` / `npm run typecheck` / `npm run build` / `npm run e2e` (headless Chrome smoke test against a running dev server) / `npm run demo-song` (regenerates the two bundled songs; uses ffmpeg for AAC if present).
+## Project context
+
+- Owner's kit: Roland **TD-07KV** (KD-10 kick, PDX-8 snare, PDX-6A single-zone toms, CY-5 hi-hat + control pedal, two CY-8 bow/edge cymbals, no ride bell) with a TAMA Iron Cobra 200 double pedal. Both beaters send note 36.
+- Module facts that shape code: GENERIC USB mode = class-compliant MIDI, no driver; hi-hat open/closed is chosen by the module (46 vs 42) from pedal CC#4, which caps near 90 when closed; edge zones send 22/26; note-offs arrive 0.1 s after every hit at velocity 64; no positional sensing. Full table: `docs/research.md` §1.
+- Direction: songs-first. First target song is "Labon Ko" (Pritam/KK): 108 BPM, 4/4, straight feel (not 12/8), A minor, 5:41 album / 2:37 film edit. Hindi songs have no Clone Hero / YARG charts (Chorus Encore: zero) and only AI-generated Songsterr tabs, so charts are generated locally (demucs-mlx → drum2midi/ADTOF → song folder → Studio) — see `docs/ROADMAP.md`.
+- Chrome/Edge only (Safari has no Web MIDI). Dev server on localhost is a secure context, fine for `requestMIDIAccess`.
+- Personal repo under `~/technowizard`: any `gh` write must use the AtharvaCM account (see global CLAUDE.md).
+
+## Inherited from DRUMKILLER (still accurate)
+
+- `npm run dev` / `npm test` / `npm run typecheck` / `npm run build` / `npm run e2e` (headless Chrome smoke test against a running dev server) / `npm run demo-song` (regenerates the two bundled demo songs; uses ffmpeg for AAC if present).
 - `src/types.ts` is the shared contract — change it deliberately; every module depends on it.
-- Time model: `chartTime = transport.position − song.offset`. Input hits are timestamped with `performance.now()` and mapped to the audio clock via `AudioEngine.perfToAudioTime` (uses `getOutputTimestamp`, so no extra output-latency compensation on that path — see `inputLatencyCompensation`).
+- Time model: `chartTime = transport.position − song.offset`. Input hits are timestamped with `performance.now()` (Web MIDI hardware stamps when sane, see `src/input/midi.ts`) and mapped to the audio clock via `AudioEngine.perfToAudioTime` (uses `getOutputTimestamp`, so no extra output-latency compensation on that path — see `inputLatencyCompensation`).
 - Charts are standard MIDI (GM drum notes, channel 10). `deriveDifficulty` is filter-only: easy ⊆ medium ⊆ hard ⊆ expert.
+- Device presets live in `src/midi/gm.ts` (`DEVICE_PRESETS`, most specific first; `findPreset` matches the port name). Every preset note must resolve through `voiceForNote` — the gm test enforces it — so a non-GM note (like Roland's 22/26) needs an entry in `NOTE_TO_VOICE` first.
 - Song folder format is documented in `docs/SONG-FORMAT.md`; `public/songs/index.json` lists bundled folders.
-- Performance video: `src/game/videoRecorder.ts` composites highway canvas + webcam + a canvas repaint of the DOM HUD into an offscreen 16:9 canvas each frame (`SessionCallbacks.onFrame`), and records it with `MediaRecorder` together with `AudioEngine.captureNode` (master bus tap). When the take ends, `VideoRecorder.finish(card)` keeps recording for `OUTRO_MS` showing a results card (score, stars, stats, judgement bars, timing heatmap) over the frozen highway, with the camera still live; the game screen passes the results screen a *promise* of the video, shown as a placeholder until it resolves. The e2e test exercises it with Chrome's fake camera.
-- Studio (`src/ui/studio.ts`): SONG and CHART tabs over one in-memory working copy. Recording happens inside the chart editor (`src/ui/chartEditor.ts`): `Transport.play(from, atAudioTime)` schedules the song after a count-in whose clicks come from a separate `Metronome`, and pad/keyboard hits are inserted at the snapped playhead. A song may carry a second mix with drums (`meta.audioWithDrums`); the editor swaps it in with `Transport.swapBuffer`.
-- Results screen: `src/game/timingHeatmap.ts` draws every judged hit (voice + signed delta, passed from the game screen) as a heat map over the strike line.
+- Performance video: `src/game/videoRecorder.ts` composites highway canvas + webcam + HUD into an offscreen 16:9 canvas each frame and records it with `MediaRecorder` together with `AudioEngine.captureNode`. `VideoRecorder.finish(card)` appends a results card. The e2e test exercises it with Chrome's fake camera.
+- Studio (`src/ui/studio.ts`): SONG and CHART tabs over one in-memory working copy. Recording happens inside the chart editor (`src/ui/chartEditor.ts`). A song may carry a second mix with drums (`meta.audioWithDrums`).
 - `window.dk` (App), `window.dkSession` (active GameSession) and `window.dkEditor` (open chart editor) are exposed for debugging and the e2e test.
