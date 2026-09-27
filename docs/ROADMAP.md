@@ -4,8 +4,8 @@ Songs-first. Every phase ends with something playable on the TD-07.
 
 ## Phase 0 — prove the pipe (no code)
 
-- [ ] USB-C → USB-B **2.0** cable. Plug in. Module stays in `USBDrv = GENERIC`.
-- [ ] `npm run dev`, open in Chrome, allow MIDI, confirm the Roland V-Drums preset auto-loads and every pad shows in the Pad Setup monitor without "(ignored)".
+- [x] USB-C → USB-B **2.0** cable. Plug in. Module stays in `USBDrv = GENERIC`. (2026-09-27: enumerates as `Roland TD-07`, vendor 0x0582. Module must be powered on to appear.)
+- [x] `npm run dev`, open in Chrome, allow MIDI, confirm the Roland V-Drums preset auto-loads and every pad shows in the Pad Setup monitor without "(ignored)". (2026-09-27: port name `TD-07`, preset auto-loaded, every zone verified, skew ≤ 1 ms, 0 fallbacks. Findings in docs/research.md §1a.)
 - [ ] Settings → Run calibration with wired headphones. Note the offset.
 - [ ] `brew install ffmpeg`; `pip install demucs-mlx` (and upstream `demucs` for `--two-stems`).
 - [ ] Claim the 40 free Melodics lessons Roland bundles with the TD-07 (separate app, technique work on the side).

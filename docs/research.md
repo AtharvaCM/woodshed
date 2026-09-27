@@ -35,6 +35,25 @@ Goal: free, local, songs-first drum companion for a Roland TD-07 + double pedal 
 - Coach mode: Time Check, Quiet Count, Auto Up/Down, Change Up. 100-pt score, no history.
 - Kit variants share the same module; only pads differ (DMK: KD-2 kick, CY-5 cymbals; KV: KD-10, CY-8; KX: PDX-12 snare, PDX-8 toms; KVX: VH-10 hi-hat, CY-12C, CY-13R ride).
 
+### 1a. Pad test on the actual TD-07KV (2026-09-27, Chrome + Web MIDI, GENERIC mode)
+
+Port name `TD-07`, channel 10, every hit stamped by CoreMIDI (skew 0 to -1 ms, no fallbacks). Observed notes:
+
+| Stroke | Note(s) seen | Note |
+|---|---|---|
+| Snare head | 38 | |
+| Snare rim, hard | 40 | rimshot |
+| Snare rim, light | 40 (not 37) | cross-stick never sent → module `SETUP > PAD > XStickSens` is OFF or threshold too low; both map to snare anyway |
+| Hat bow, pedal down | 42 | |
+| Hat bow, pedal up | 46 | |
+| Hat edge, pedal up | 26 | Roland edge note; needs the 26 → open-hat entry in gm.ts |
+| Foot chick | 44 | velocity 16–87 |
+| Crash edge | 55 **and** 49, 50 ms apart | one stroke sent edge + bow; both map to crash, but the second reads as an overhit in game. Candidate for a per-voice dedupe window (~40 ms) in the input hub |
+| Kick, either beater | 36 | one stroke occasionally followed by a low-velocity (v18–32) ghost 40–60 ms later = beater bounce. Fix on module: raise `SETUP > PAD > KICK > MaskTime`, or app-side velocity threshold |
+| Double kick, 8 hits | 36 ×8 at ~270 ms spacing | evenness data usable straight from timestamps |
+
+Toms 48/45/43, ride bow 51, ride edge 59, crash bow 49 confirmed earlier in the same session. Ride bell 53 never fires on the KV's CY-8 (expected).
+
 ## 2. Browser stack
 
 - Web MIDI: Chrome 43+/Edge 79+/Firefox 108+. **Safari: none, any version.** Chrome 124+ shows a permission prompt for all MIDI access. Secure context only (HTTPS or localhost).
