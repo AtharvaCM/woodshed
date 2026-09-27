@@ -9,6 +9,7 @@ Goal: free, local, songs-first drum companion for a Roland TD-07 + double pedal 
   - **GENERIC** (default) = class-compliant, MIDI only, **no driver**. Chrome Web MIDI sees it immediately.
   - **VENDOR** = MIDI + 2-ch USB audio (44.1 kHz). Needs Roland "TD-07 Driver Ver.1.0.2 for macOS Sonoma 14.x or later" (Apple silicon OK; Roland compat table lists macOS 26 Tahoe = Yes). Power-cycle after changing. Approve driver in System Settings > Privacy & Security.
   - USB audio stream = drums only. MIX IN / Bluetooth backing track is NOT captured. Good for clean stems.
+- **Play-along rig that works**: Mac headphone jack → 3.5 mm TRS → TD-07 MIX IN, headphones on the module. Song and kit in one pair of ears, 16 ms output latency, calibration lands at ±3 ms. Keep `Play built-in kit on hit` off; the module makes the sound.
 - Bluetooth: A2DP audio is one-way INTO the module (phone → headphones). Mac → TD-07 AUDIO over Bluetooth measured **280 ms output latency** in Chrome (2026-09-28); the app now draws the highway against the heard time (`AudioEngine.heardAudioTime`), so it stays playable, but wired MIX IN is still the right rig. BLE MIDI exists (`[Bluetooth] > BT MIDI ON`, pair via Audio MIDI Setup > MIDI Studio > Configure Bluetooth) but Roland warns of latency. Use USB for scoring.
 - No 5-pin MIDI out. One app owns the MIDI port at a time (close Chrome tab before Clone Hero, etc.).
 - Firmware: System Program 1.04 (Oct 2024). Update via USB mass storage (hold ENTER at power-on, copy TD07_UPA.BIN). Auto Off default now 20 min; disable for long sessions.
