@@ -27,6 +27,7 @@ Songs-first. Every phase ends with something playable on the TD-07.
 
 ## Phase 3 — TD-07 specifics
 
+- [x] Highway, miss detection and playhead follow the *heard* audio time (output latency removed via `getOutputTimestamp`), not the raw audio clock. Needed the moment the Mac's audio went to the TD-07 over Bluetooth (280 ms). Done 2026-09-28.
 - [ ] Read CC#4 in `src/input/midi.ts`: classify half-open hats, expose pedal position to the HUD; calibrate the ~90 closed ceiling per device.
 - [ ] Double-kick stats: inter-onset spacing and evenness for consecutive note-36 hits (both beaters share one note).
 - [ ] Session log to IndexedDB: per take, per section, per voice timing error and velocity spread (the data the coach reads).

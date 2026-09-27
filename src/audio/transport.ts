@@ -79,10 +79,14 @@ export class Transport {
     return this._segmentStart;
   }
 
-  /** Song position in seconds (may be negative during pre-roll). */
+  /**
+   * Song position in seconds as the listener HEARS it right now (output latency removed; may be
+   * negative during pre-roll). Drives the highway, miss detection and the playhead, so what you see
+   * matches what you hear even over Bluetooth. Use {@link audioTimeAtPosition} for scheduling.
+   */
   get position(): number {
     if (!this._playing) return this.pausedPos;
-    return this.positionAtAudioTime(this.engine.ctx.currentTime);
+    return this.positionAtAudioTime(this.engine.heardAudioTime());
   }
 
   /** Song position at a given audio-clock time. */

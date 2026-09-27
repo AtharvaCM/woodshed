@@ -161,6 +161,17 @@ export class AudioEngine {
   private outputTimestampUsed = false;
 
   /**
+   * Audio-clock time of the sample the listener is hearing RIGHT NOW, i.e. `currentTime` with the
+   * output latency removed. On wired outputs that is 5–30 ms behind the clock; on Bluetooth
+   * 150–300 ms. Anything the player sees or is judged against (highway, miss detection, playhead)
+   * should use this, so the picture matches the sound. Scheduling still uses `ctx.currentTime`.
+   */
+  heardAudioTime(): number {
+    const p = this.clockPair();
+    return this.outputTimestampUsed ? p.audio : this.ctx.currentTime - this.outputLatency;
+  }
+
+  /**
    * Seconds to subtract from a perf-timestamped input hit to line it up with what the player HEARD.
    * getOutputTimestamp() already describes the sample leaving the speakers, so no extra compensation
    * is needed on that path; the back-to-back fallback needs the output latency removed.

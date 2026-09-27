@@ -5,6 +5,6 @@ dist
 .e2e
 .claude/
 .venv/
-tools/
-audio/
+/tools/
+/audio/
 public/songs-local/

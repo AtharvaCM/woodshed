@@ -31,6 +31,7 @@ ap.add_argument('--charter', default='woodshed pipeline')
 ap.add_argument('--genre')
 ap.add_argument('--preview-start', type=float)
 ap.add_argument('--accent')
+ap.add_argument('--fold-open-hats', action='store_true', help='write open hi-hat (46) as closed (42); transcribers often call every accented 16th "open"')
 ap.add_argument('--out', required=True)
 a = ap.parse_args()
 
@@ -45,7 +46,8 @@ for n in notes:
     t = n.start - a.offset
     if t < 0:
         continue
-    drums.notes.append(pretty_midi.Note(velocity=max(1, min(127, int(n.velocity))), pitch=n.pitch, start=t, end=t + beat / 8))
+    pitch = 42 if (a.fold_open_hats and n.pitch == 46) else n.pitch
+    drums.notes.append(pretty_midi.Note(velocity=max(1, min(127, int(n.velocity))), pitch=pitch, start=t, end=t + beat / 8))
 out.instruments.append(drums)
 out.time_signature_changes.append(pretty_midi.TimeSignature(4, 4, 0))
 
