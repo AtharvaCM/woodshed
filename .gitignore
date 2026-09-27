@@ -4,3 +4,5 @@ dist
 *.log
 .e2e
 .claude/
+.venv/
+tools/

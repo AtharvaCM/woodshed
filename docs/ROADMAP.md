@@ -7,7 +7,7 @@ Songs-first. Every phase ends with something playable on the TD-07.
 - [x] USB-C → USB-B **2.0** cable. Plug in. Module stays in `USBDrv = GENERIC`. (2026-09-27: enumerates as `Roland TD-07`, vendor 0x0582. Module must be powered on to appear.)
 - [x] `npm run dev`, open in Chrome, allow MIDI, confirm the Roland V-Drums preset auto-loads and every pad shows in the Pad Setup monitor without "(ignored)". (2026-09-27: port name `TD-07`, preset auto-loaded, every zone verified, skew ≤ 1 ms, 0 fallbacks. Findings in docs/research.md §1a.)
 - [x] Settings → Run calibration. (2026-09-27: first two runs were on a JBL PartyBox over Bluetooth, Chrome reported 248 ms output latency, hits 43–58 ms late. Switched to MacBook speakers: output latency 24 ms, hits 15–40 ms *early*, offset set to +40 ms. Re-run once the Mac feeds the TD-07 MIX IN over a 3.5 mm cable; never calibrate or play over Bluetooth audio.)
-- [ ] `brew install ffmpeg`; `pip install demucs-mlx` (and upstream `demucs` for `--two-stems`).
+- [x] `brew install ffmpeg`; `pip install demucs-mlx` (and upstream `demucs` for `--two-stems`). (2026-09-27: ffmpeg 9.0.2, Python 3.12 venv at `.venv` via uv with demucs-mlx 1.4.14, demucs 4.1.0, ADTOF-pytorch, and drum2midi cloned to `tools/drum2midi` with its setup script run. See README → Audio tooling.)
 - [ ] Claim the 40 free Melodics lessons Roland bundles with the TD-07 (separate app, technique work on the side).
 
 ## Phase 1 — Labon Ko playable

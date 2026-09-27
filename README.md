@@ -50,6 +50,30 @@ Only DRUMKILLER's two synthesized demo songs are bundled. The intended pipeline 
 
 Details, tool versions and caveats: [docs/research.md](docs/research.md) §3. Automating steps 2–4 (and a MIDI import button in the Studio) is on the roadmap.
 
+### Audio tooling (macOS, Apple Silicon)
+
+Lives in a project-local Python 3.12 venv, kept out of git:
+
+```
+brew install ffmpeg uv
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python pip demucs-mlx demucs \
+  "adtof-pytorch @ git+https://github.com/xavriley/ADTOF-pytorch"
+git clone --depth 1 https://github.com/miraer/drum2midi.git tools/drum2midi
+( cd tools/drum2midi && ../../.venv/bin/python setup_env.py --no-render )
+```
+
+Then:
+
+```
+.venv/bin/demucs-mlx -n htdemucs_ft -o out song.mp3          # drums/bass/other/vocals stems, seconds on M-series
+.venv/bin/demucs --two-stems=drums -o out song.mp3             # drums.wav + no_drums.wav (the play-along mix)
+.venv/bin/adtof --audio out/htdemucs_ft/song/drums.wav --out song.mid --device cpu   # 5-class MIDI
+.venv/bin/python tools/drum2midi/drum2midi.py out/htdemucs_ft/song/drums.wav -o song.mid   # richer: hat states, crash vs ride, velocities
+```
+
+`tools/` and `.venv/` are gitignored. Model weights land in `~/.cache`.
+
 ## Project layout
 
 ```

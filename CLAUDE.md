@@ -8,6 +8,7 @@ Browser practice room for e-drummers, Roland TD-07KV first. Forked from DRUMKILL
 - Module facts that shape code: GENERIC USB mode = class-compliant MIDI, no driver; hi-hat open/closed is chosen by the module (46 vs 42) from pedal CC#4, which caps near 90 when closed; edge zones send 22/26; note-offs arrive 0.1 s after every hit at velocity 64; no positional sensing. Full table: `docs/research.md` §1.
 - Direction: songs-first. First target song is "Labon Ko" (Pritam/KK): 108 BPM, 4/4, straight feel (not 12/8), A minor, 5:41 album / 2:37 film edit. Hindi songs have no Clone Hero / YARG charts (Chorus Encore: zero) and only AI-generated Songsterr tabs, so charts are generated locally (demucs-mlx → drum2midi/ADTOF → song folder → Studio) — see `docs/ROADMAP.md`.
 - Chrome/Edge only (Safari has no Web MIDI). Dev server on localhost is a secure context, fine for `requestMIDIAccess`.
+- Audio tooling: `.venv` is a uv-managed Python 3.12 venv (demucs-mlx, demucs, adtof-pytorch); `tools/drum2midi` is an ignored clone with its own editable ADTOF checkout. Always call `.venv/bin/<tool>`; there is no `python` on PATH. Commands in README → Audio tooling.
 - Personal repo under `~/technowizard`: any `gh` write must use the AtharvaCM account (see global CLAUDE.md).
 
 ## Inherited from DRUMKILLER (still accurate)
