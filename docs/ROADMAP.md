@@ -45,6 +45,6 @@ Songs-first. Every phase ends with something playable on the TD-07.
 
 ## Housekeeping
 
-- [ ] `docs/index.html` and `.github/workflows/pages.yml` still deploy the DRUMKILLER landing page to GitHub Pages on push to `main`. Rebrand or drop before pushing to GitHub.
+- [x] DRUMKILLER landing page and its Pages deploy removed; `.github/workflows/ci.yml` runs typecheck + tests + build. Hosting the app (GitHub Pages or elsewhere) is a later decision.
 - [ ] `scripts/make-demo-song.mjs`, the bundled demo songs' artist field, `docs/SONG-FORMAT.md`'s title, and header comments in `src/types.ts`, `src/midi/index.ts`, `src/ui/styles.css` still say DRUMKILLER (harmless; attribution).
 - Browser storage deliberately keeps upstream's names (IndexedDB `drumkiller`, localStorage `dk.*`) so a library built in DRUMKILLER on the same origin carries over. Rename only with a migration.
