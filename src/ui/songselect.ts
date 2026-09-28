@@ -1,7 +1,8 @@
 import type { App, Screen } from '@/app';
+import { typingInField } from '@/app';
 import { type Difficulty, type SongListEntry, type SongPackage } from '@/types';
 import { loadSongFromZip, loadSongFromFiles, availableDifficulties, playableDifficulties } from '@/song';
-import { h, button, toast, pickFile, pickFolder, clear, fmtScore, fmtTime } from './dom';
+import { h, append, button, toast, pickFile, pickFolder, clear, fmtScore, fmtTime } from './dom';
 import { topbar } from './topbar';
 import { drawProceduralArt } from './artwork';
 import { applySongKit } from './game';
@@ -9,12 +10,15 @@ import { starString } from '@/game/scoring';
 import { Transport } from '@/audio';
 
 const DIFF_LABEL: Record<Difficulty, string> = { easy: 'EASY', medium: 'MEDIUM', hard: 'HARD', expert: 'EXPERT' };
+/** Practice speed presets — the 60 → 80 → 100 % ladder plus the steps around it. */
+const PRACTICE_RATES = [0.5, 0.6, 0.7, 0.8, 0.9, 1];
 
 export function songSelectScreen(app: App, params?: Record<string, unknown>): Screen {
   const practice = params?.practice === true;
   let entries: SongListEntry[] = [];
   let selected: SongListEntry | null = null;
   let difficulty: Difficulty = (localStorage.getItem('dk.lastDifficulty') as Difficulty) || 'medium';
+  let rate = Number(localStorage.getItem('dk.practiceRate') ?? 1) || 1;
   let previewTransport: Transport | null = null;
   let previewToken = 0;
 
@@ -52,8 +56,29 @@ export function songSelectScreen(app: App, params?: Record<string, unknown>): Sc
     selected = e;
     list.querySelectorAll('.songcard').forEach((c) => c.classList.remove('selected'));
     card.classList.add('selected');
+    card.scrollIntoView({ block: 'nearest' });
     renderDetail();
     startPreview(e);
+  }
+
+  function selectBy(step: number): void {
+    if (!entries.length) return;
+    const i = selected ? entries.findIndex((x) => x.meta.id === selected!.meta.id) : -1;
+    const next = Math.max(0, Math.min(entries.length - 1, i < 0 ? 0 : i + step));
+    const card = list.children[next] as HTMLElement | undefined;
+    if (card && entries[next] !== selected) select(entries[next], card);
+  }
+
+  function setDifficulty(d: Difficulty): void {
+    difficulty = d;
+    localStorage.setItem('dk.lastDifficulty', d);
+    renderDetail();
+  }
+
+  function setRate(r: number): void {
+    rate = r;
+    localStorage.setItem('dk.practiceRate', String(r));
+    renderDetail();
   }
 
   async function startPreview(e: SongListEntry): Promise<void> {
@@ -115,7 +140,7 @@ export function songSelectScreen(app: App, params?: Record<string, unknown>): Sc
       const b = best[d];
       const btn = h(
         'div',
-        { class: `diff ${d === difficulty ? 'selected' : ''} ${explicit.has(d) ? '' : 'derived'}`, dataset: { d }, onClick: () => { difficulty = d; localStorage.setItem('dk.lastDifficulty', d); renderDetail(); } },
+        { class: `diff ${d === difficulty ? 'selected' : ''} ${explicit.has(d) ? '' : 'derived'}`, dataset: { d }, title: explicit.has(d) ? '' : 'AUTO: thinned out from the hardest chart', onClick: () => setDifficulty(d) },
         DIFF_LABEL[d],
         h('span', { class: 'best' }, b ? `${fmtScore(b.score)} · ${starString(b.stars)}` : '—'),
       );
@@ -128,28 +153,36 @@ export function songSelectScreen(app: App, params?: Record<string, unknown>): Sc
       h('thead', null, h('tr', null, h('th', null, '#'), h('th', null, 'Player'), h('th', null, 'Score'), h('th', null, 'Acc'), h('th', null, 'Combo'))),
       h('tbody', null, top.length ? top.map((s, i) => h('tr', null, h('td', null, String(i + 1)), h('td', null, s.player), h('td', null, fmtScore(s.score)), h('td', null, `${(s.accuracy * 100).toFixed(1)}%`), h('td', null, `${s.maxCombo}${s.fullCombo ? ' FC' : ''}`))) : h('tr', null, h('td', { colSpan: 5, class: 'mute' }, 'No scores yet — be the first.'))),
     );
-    detail.append(
+    const canPlay = playable.length > 0;
+    const bpmAt = Math.round(e.meta.bpm * rate);
+    const playBtn = Object.assign(button([h('span', null, h('kbd', null, practice ? 'P' : '↵'), ' PLAY'), h('span', { class: 'hint' }, 'full song · scored')], () => play(e, 'play'), `${practice ? '' : 'primary'} big`), { disabled: !canPlay });
+    const practiceBtn = Object.assign(button([h('span', null, h('kbd', null, practice ? '↵' : 'P'), ` PRACTICE ${Math.round(rate * 100)}%`), h('span', { class: 'hint' }, `${bpmAt} BPM · loop the hard bars`)], () => play(e, 'practice'), `${practice ? 'primary' : ''} big`), { disabled: !canPlay });
+    const rates = h('div', { class: 'rate-chips' }, ...PRACTICE_RATES.map((r) => h('button', { class: `chip ${Math.abs(r - rate) < 0.001 ? 'on' : ''}`, onClick: () => setRate(r) }, `${Math.round(r * 100)}%`)));
+    append(detail, [
       h('h2', { class: 'display' }, e.meta.title),
       h('div', { class: 'dim' }, `${e.meta.artist}${e.meta.album ? ' · ' + e.meta.album : ''}${e.meta.year ? ' · ' + e.meta.year : ''}`),
-      h('div', { class: 'row', style: { marginTop: '10px' } }, h('span', { class: 'pill' }, `${Math.round(e.meta.bpm)} BPM`), e.meta.length ? h('span', { class: 'pill' }, fmtTime(e.meta.length)) : null, e.meta.charter ? h('span', { class: 'pill' }, `chart: ${e.meta.charter}`) : null, e.meta.samples && Object.keys(e.meta.samples).length ? h('span', { class: 'pill accent' }, 'custom kit') : null),
+      h('div', { class: 'row', style: { marginTop: '10px', gap: '8px' } }, h('span', { class: 'pill' }, `${Math.round(e.meta.bpm)} BPM`), e.meta.length ? h('span', { class: 'pill' }, fmtTime(e.meta.length)) : null, e.meta.charter ? h('span', { class: 'pill' }, `chart: ${e.meta.charter}`) : null, e.meta.samples && Object.keys(e.meta.samples).length ? h('span', { class: 'pill accent' }, 'custom kit') : null),
       h('h3', null, 'Difficulty'),
-      playable.length ? diffs : h('div', { class: 'hint-box' }, 'This song has no chart yet. Open it in the Studio to record or draw one.'),
-      ...(playable.length ? [h('div', { class: 'small mute', style: { marginTop: '6px' } }, 'AUTO = generated from the hardest chart in the song folder.')] : []),
-      h('h3', null, practice ? 'Practice' : 'Leaderboard'),
-      practice ? h('div', { class: 'hint-box' }, 'Practice mode: adjust speed, loop sections, hear guide drums. Scores are not saved.') : lb,
-      h('div', { class: 'btn-row', style: { marginTop: '20px' } },
-        Object.assign(button(practice ? 'PRACTICE' : 'PLAY', () => play(e), 'primary big'), { disabled: !playable.length }),
-        e.source !== 'bundled' ? button('REMOVE', () => remove(e), 'danger') : null,
+      canPlay ? diffs : h('div', { class: 'hint-box' }, 'This song has no chart yet. Open it in the Studio to record or draw one.'),
+      canPlay && playable.some((d) => !explicit.has(d)) ? h('div', { class: 'small mute', style: { marginTop: '6px' } }, 'AUTO = thinned out from the hardest chart in the song folder.') : null,
+      h('div', { class: 'launch' },
+        playBtn,
+        practiceBtn,
+        h('div', { class: 'rates' }, h('span', { class: 'small dim' }, 'Practice speed'), rates),
       ),
-    );
+      h('h3', null, `Leaderboard · ${difficulty}`),
+      lb,
+      h('div', { class: 'small mute', style: { marginTop: '14px' } }, h('kbd', null, '←'), h('kbd', null, '→'), ' song  ', h('kbd', null, '1'), '–', h('kbd', null, '4'), ' difficulty  ', h('kbd', null, 'Esc'), ' back'),
+      e.source !== 'bundled' ? h('div', { class: 'btn-row', style: { marginTop: '14px' } }, button('REMOVE FROM LIBRARY', () => remove(e), 'danger small icon')) : null,
+    ]);
   }
 
-  async function play(e: SongListEntry): Promise<void> {
+  async function play(e: SongListEntry, mode: 'play' | 'practice'): Promise<void> {
     stopPreview();
     await app.boot();
     try {
       const pkg = await app.library.load(e);
-      app.navigate('game', { pkg, difficulty, mode: practice ? 'practice' : 'play' });
+      app.navigate('game', { pkg, difficulty, mode, rate: mode === 'practice' ? rate : 1 });
     } catch (err) {
       toast(`Could not load song: ${(err as Error).message}`, 'bad');
     }
@@ -222,11 +255,32 @@ export function songSelectScreen(app: App, params?: Record<string, unknown>): Sc
     if (app.settings.drumSoundsOnHit) app.kit.trigger(hit.voice, hit.velocity);
   });
 
+  const onKey = (ev: KeyboardEvent) => {
+    if (typingInField(ev) || ev.metaKey || ev.ctrlKey || ev.altKey || document.querySelector('.modal-back')) return;
+    if (ev.code === 'Enter' && (ev.target as HTMLElement | null)?.closest?.('button')) return; // a focused button handles its own Enter
+    // Drum keys belong to the kit audition; everything below is unbound by default.
+    if (Object.values(app.settings.keyboard).some((codes) => codes.includes(ev.code))) return;
+    const e = selected;
+    const playable = e ? playableDifficulties(e.meta) : [];
+    const digit = /^Digit([1-4])$/.exec(ev.code);
+    if (ev.code === 'ArrowLeft' || ev.code === 'ArrowUp') selectBy(-1);
+    else if (ev.code === 'ArrowRight' || ev.code === 'ArrowDown') selectBy(1);
+    else if (digit) {
+      const d = (['easy', 'medium', 'hard', 'expert'] as Difficulty[])[Number(digit[1]) - 1];
+      if (playable.includes(d)) setDifficulty(d);
+    } else if (ev.code === 'Enter' && e && playable.length) play(e, practice ? 'practice' : 'play');
+    else if (ev.code === 'KeyP' && e && playable.length) play(e, practice ? 'play' : 'practice');
+    else if (ev.code === 'Escape') app.navigate('title');
+    else return;
+    ev.preventDefault();
+  };
+  window.addEventListener('keydown', onKey);
+
   const el = h(
     'div',
     { class: 'screen' },
-    topbar(app, practice ? 'PRACTICE' : 'SELECT SONG', button('IMPORT ZIP', importZip), button('IMPORT FOLDER', importFolder), button('BACK', () => app.navigate('title'), 'ghost')),
-    h('div', { class: 'screen-body' }, h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 420px', gap: '24px', alignItems: 'start' } }, list, detail)),
+    topbar(app, practice ? 'PRACTICE' : 'SONGS', button('IMPORT ZIP', importZip), button('IMPORT FOLDER', importFolder), button('BACK', () => app.navigate('title'), 'ghost')),
+    h('div', { class: 'screen-body' }, h('div', { class: 'song-select' }, list, detail)),
   );
   refresh().then(() => {
     // auto-select last played song
@@ -248,6 +302,7 @@ export function songSelectScreen(app: App, params?: Record<string, unknown>): Sc
       stopPreview();
       previewToken++;
       unsubHits();
+      window.removeEventListener('keydown', onKey);
       window.removeEventListener('dragover', onDragOver);
       window.removeEventListener('dragleave', onDragLeave);
       window.removeEventListener('drop', onDrop);

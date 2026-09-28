@@ -32,7 +32,9 @@ Switch `USBDrv` to `VENDOR` and install Roland's driver only when you want the m
 
 - **Highway**: hi-hat, snare, kick, toms, ride lanes and a full-width crash bar. Four difficulties per song; easier charts derive automatically from the hardest one.
 - **Scoring**: perfect/great/good windows (scaled by *Hit window size* in Settings), combo, stars, full-combo badge, local leaderboards.
-- **Practice mode**: 50–125 % speed, A/B loop, seek, guide drums. Nothing is saved.
+- **Practice mode**: 50–125 % speed (presets on the song screen), bar counter, loop 1/2/4/8 bars from the current bar, jump bar by bar, guide drums on/off mid-take. Keys: `↑`/`↓` speed, `←`/`→` bar, `1` `2` `4` `8` loop, `0` no loop. Nothing is saved.
+- **Where it slipped**: the results screen colours every bar by accuracy and picks your weakest 4-bar stretch; `P` (or the button) drops you straight into practice looping those bars.
+- **Title screen**: kit / pad map / calibration status with a fix-it button each, and "pick up where you left off" back into your last song. Browser Back/Forward move between screens.
 - **Studio**: turn any audio file into a song. Tap tempo, set the downbeat offset, then record a take on the kit with count-in and click, quantize it (1/4…1/32, triplets, strength, double-hit merge), and polish it in the piano-roll chart editor. Export as standard MIDI (GM drums, channel 10) or as a song-folder zip. There is no MIDI *import* button yet; a chart made elsewhere goes in as `expert.mid` inside a song folder (see below).
 - **Song folders**: `song.json` + audio + one MIDI per difficulty + optional samples/artwork. Drag a zip onto the song list to import. Format: [docs/SONG-FORMAT.md](docs/SONG-FORMAT.md).
 - **Pad Setup wizard**: per-device bindings, presets for Roland V-Drums, Yamaha FGDP, generic 4×4 pads and General MIDI, live MIDI monitor with timestamp health.

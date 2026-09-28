@@ -3,10 +3,12 @@ import type { Chart, Difficulty, ScoreSummary, SongPackage } from '@/types';
 import { DIFFICULTIES, DRUM_VOICES } from '@/types';
 import { chartFromMidi, deriveDifficulty, parseMidi, constantTempoMap, DEFAULT_PPQ } from '@/midi';
 import { getChartBlob } from '@/song';
-import { GameSession, type GameMode } from '@/game/session';
+import { GameSession, computeBeats, type GameMode } from '@/game/session';
+import { barAt, barSpan, barStarts, type BarNote } from '@/game/bars';
+import { typingInField } from '@/app';
 import { CAM_ASPECT, VideoRecorder, openCamera, videoRecordingSupported, type HudSnapshot, type RecordedVideo } from '@/game/videoRecorder';
 import { hitWindowsFor, starString, verdictFor } from '@/game/scoring';
-import { h, button, toast, fmtScore, clear } from './dom';
+import { h, button, toast, fmtScore } from './dom';
 import type { TimingHit } from '@/game/timingHeatmap';
 
 /** Parse the chart file listed for `difficulty`, or null when the package has none. */
@@ -67,7 +69,11 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
   const difficulty = (params?.difficulty as Difficulty) ?? 'medium';
   const mode = (params?.mode as GameMode) ?? 'play';
   const settings = app.settings;
+  /** Practice: start looping these bars (from the results screen's "practice this" button). */
+  const loopParam = params?.loop as { first: number; last: number } | undefined;
   localStorage.setItem('dk.lastSong', pkg.meta.id);
+  localStorage.setItem('dk.lastDifficulty', difficulty);
+  if (params?.back !== 'studio') localStorage.setItem('dk.lastMode', mode);
 
   const canvas = h('canvas', { class: 'highway' });
   const scoreEl = h('div', { class: 'score' }, '0');
@@ -81,6 +87,8 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
   const countdownEl = h('div', { class: 'countdown' });
   const modeTag = h('div', { class: 'mode-tag' });
   const timingEl = h('div', { class: 'timing' }, '');
+  const barEl = h('div', { class: 'bar-pos' }, '');
+  const keyHint = h('div', { class: 'key-hint' });
   const practiceBar = h('div', { class: 'practice-bar' });
   const loading = h('div', { class: 'pause-overlay' }, h('div', { class: 'display', style: { fontFamily: 'var(--font-display)', fontSize: '28px' } }, 'LOADING…'));
 
@@ -93,10 +101,11 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     modeTag,
     judgeEl,
     streakEl,
-    h('div', { class: 'song-info' }, h('div', { class: 't' }, pkg.meta.title), h('div', { class: 'a' }, `${pkg.meta.artist} · ${difficulty.toUpperCase()}`)),
+    h('div', { class: 'song-info' }, barEl, h('div', { class: 't' }, pkg.meta.title), h('div', { class: 'a' }, `${pkg.meta.artist} · ${difficulty.toUpperCase()}`)),
     h('div', { class: 'acc-box' }, accEl, starsEl),
     practiceBar,
     timingEl,
+    keyHint,
     countdownEl,
   );
   const el = h('div', { class: 'screen game' }, canvas, hud, loading);
@@ -107,10 +116,13 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
   let lastStreak: HudSnapshot['streak'] = null;
   let countdown: number | null = null;
   let pauseOverlay: HTMLElement | null = null;
-  let rate = mode === 'practice' ? Number(localStorage.getItem('dk.practiceRate') ?? 1) || 1 : 1;
+  let rate = mode === 'practice' ? Number(params?.rate) || Number(localStorage.getItem('dk.practiceRate') ?? 1) || 1 : 1;
   let guideDrums = mode === 'practice' ? localStorage.getItem('dk.guideDrums') === '1' : false;
-  let loopA: number | null = null;
-  let loopB: number | null = null;
+  /** Bar downbeats (chart seconds) and the last bar with music in it. */
+  let starts: number[] = [];
+  let lastBar = 0;
+  let shownBar = -1;
+  let loopBars: { first: number; last: number } | null = null;
 
   const JUDGE_COLORS: Record<string, string> = { perfect: '#ffe600', great: '#8dff5a', good: '#3ef2ff', miss: '#ff3b3b' };
   // HUD pops run through the Web Animations API instead of the remove-class / read offsetWidth / add-class
@@ -196,6 +208,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
   }
 
   async function build(): Promise<void> {
+    await app.boot(); // idempotent; covers entry points that skipped it (e.g. a results-screen shortcut)
     const audioBlob = pkg.files.get(pkg.meta.audio);
     if (!audioBlob) throw new Error(`Audio file "${pkg.meta.audio}" missing from song folder`);
     const [audio, { chart, derived }] = await Promise.all([app.engine.decode(await audioBlob.arrayBuffer()), loadChart(pkg, difficulty)]);
@@ -203,6 +216,9 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     if (!chart.notes.length) toast('This chart has no notes.', 'bad');
     if (derived && mode === 'play') modeTag.appendChild(h('span', { class: 'pill' }, 'AUTO CHART'));
     if (mode === 'practice') modeTag.appendChild(h('span', { class: 'pill warn' }, 'PRACTICE · NO SCORE'));
+    starts = barStarts(computeBeats(chart, audio.duration - pkg.meta.offset));
+    lastBar = Math.max(1, barAt(Math.max(0, chart.duration - 0.001), starts));
+    if (mode === 'practice' && loopParam && starts.length) loopBars = { first: loopParam.first, last: Math.min(loopParam.last, starts.length) };
 
     session = new GameSession(
       app.engine,
@@ -224,7 +240,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
         reducedMotion: settings.reducedMotion,
         laneOrder: settings.laneOrder,
         renderScale: settings.renderScale,
-        loop: null,
+        loop: loopBars ? barSpan(loopBars.first, loopBars.last, starts) : null,
       },
       {
         onJudge: (ev) => {
@@ -256,6 +272,12 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
             progressFrac = f;
             progressEl.style.transform = `scaleX(${f.toFixed(4)})`;
           }
+          // Only touch the DOM when the bar actually changes.
+          const bar = session ? barAt(session.chartTime, starts) : 0;
+          if (bar !== shownBar) {
+            shownBar = bar;
+            barEl.textContent = bar < 1 ? 'COUNT-IN' : bar > lastBar ? 'OUTRO' : `BAR ${bar} / ${lastBar}`;
+          }
         },
         onCountdown: (n) => {
           countdown = n;
@@ -271,6 +293,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     await setupRecorder();
     loading.remove();
     if (mode === 'practice') buildPracticeBar();
+    renderKeyHint();
     const countIn = 3;
     if (recorder) {
       // Prime the highway so the recording's first frame (the preview's poster) shows the road.
@@ -285,7 +308,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     if (!session) return;
     const st = session.judge.timingStats();
     const avg = st.count ? `${st.mean > 0 ? '+' : ''}${Math.round(st.mean * 1000)}ms ${st.mean > 0.015 ? 'LATE' : st.mean < -0.015 ? 'EARLY' : 'ON TIME'}` : '—';
-    timingEl.textContent = `timing avg ${avg} (${st.count}) · offset ${Math.round(inputOffset * 1000)}ms · [ ] adjust`;
+    timingEl.textContent = `timing avg ${avg} (${st.count}) · input offset ${Math.round(inputOffset * 1000)} ms`;
   }
   function nudgeOffset(deltaMs: number): void {
     inputOffset = Math.round((inputOffset * 1000 + deltaMs)) / 1000;
@@ -309,45 +332,89 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     toast(`Input offset set to ${Math.round(inputOffset * 1000)} ms`, 'ok');
   }
 
+  /** Keys that play drums win over every shortcut below. */
+  const isDrumKey = (code: string) => Object.values(app.settings.keyboard).some((codes) => codes.includes(code));
+  const LOOP_LENGTHS = [1, 2, 4, 8];
+
+  function renderKeyHint(): void {
+    const k = (key: string) => h('kbd', null, key);
+    keyHint.replaceChildren(
+      ...(mode === 'practice' ? [k('↑'), k('↓'), ' speed  ', k('←'), k('→'), ' bar  ', k('1'), k('2'), k('4'), k('8'), ' loop bars  ', k('0'), ' no loop  '] : []),
+      k('['), k(']'), ' offset  ', k('Esc'), ' pause',
+    );
+  }
+
+  let refreshPractice = () => {};
+  function setRate(r: number): void {
+    rate = Math.max(0.5, Math.min(1.25, Math.round(r * 20) / 20));
+    localStorage.setItem('dk.practiceRate', String(rate));
+    session?.setRate(rate);
+    refreshPractice();
+  }
+  /** Jump by bars. Back from the middle of a bar restarts that bar first, like a media player's ⏮. */
+  function stepBar(delta: number): void {
+    if (!session || !starts.length) return;
+    // Measure from where the run-up is heading, so repeated presses keep moving instead of
+    // landing back in the bar the previous jump's run-up started in.
+    const cur = Math.max(1, barAt(session.chartTime, starts));
+    const runUp = (barSpan(cur, cur, starts).end - starts[cur - 1]) / 4; // one beat
+    const t = session.chartTime + runUp + 0.01;
+    const b = Math.max(1, barAt(t, starts));
+    let target = b + delta;
+    if (delta < 0 && t - starts[b - 1] > runUp + 0.75) target = b;
+    target = Math.max(1, Math.min(lastBar, target));
+    const { start, end } = barSpan(target, target, starts);
+    session.seek(start - (end - start) / 4);
+    jumpTarget = target;
+  }
+  /** Bar the last ◀/▶ jumped to: during its run-up, "current bar" means that one. */
+  let jumpTarget = 0;
+  function currentBar(): number {
+    const t = session!.chartTime;
+    if (jumpTarget && t < starts[jumpTarget - 1] && t > starts[jumpTarget - 1] - 2) return jumpTarget;
+    return Math.max(1, Math.min(lastBar, barAt(t, starts)));
+  }
+  function setLoop(n: number | null): void {
+    if (!session || !starts.length) return;
+    if (n === null) loopBars = null;
+    else {
+      const first = currentBar();
+      loopBars = { first, last: Math.min(lastBar, first + n - 1) };
+    }
+    session.setLoop(loopBars ? barSpan(loopBars.first, loopBars.last, starts) : null);
+    refreshPractice();
+  }
+  function setGuide(on: boolean): void {
+    guideDrums = on;
+    localStorage.setItem('dk.guideDrums', on ? '1' : '0');
+    session?.setGuideDrums(on);
+    refreshPractice();
+  }
+
   function buildPracticeBar(): void {
-    clear(practiceBar);
-    const rateEl = h('span', { class: 'rate' }, `${Math.round(rate * 100)}%`);
-    const setRate = (r: number) => {
-      rate = Math.max(0.5, Math.min(1.25, Math.round(r * 20) / 20));
-      localStorage.setItem('dk.practiceRate', String(rate));
+    const rateEl = h('span', { class: 'rate' });
+    const loopBtns = LOOP_LENGTHS.map((n) => button(String(n), () => setLoop(n), 'icon small'));
+    const loopLabel = h('span', { class: 'loop-label' });
+    const clearLoop = button('✕', () => setLoop(null), 'icon small ghost');
+    const guideBtn = button('', () => setGuide(!guideDrums), 'icon small');
+    const group = (label: string, ...items: HTMLElement[]) => h('div', { class: 'pgroup' }, h('span', { class: 'plabel' }, label), ...items);
+    refreshPractice = () => {
       rateEl.textContent = `${Math.round(rate * 100)}%`;
-      session?.setRate(rate);
+      rateEl.title = `${Math.round(pkg.meta.bpm * rate)} BPM`;
+      loopLabel.textContent = loopBars ? (loopBars.first === loopBars.last ? `BAR ${loopBars.first}` : `BARS ${loopBars.first}–${loopBars.last}`) : 'OFF';
+      loopLabel.classList.toggle('on', !!loopBars);
+      clearLoop.hidden = !loopBars;
+      loopBtns.forEach((b, i) => b.classList.toggle('active', !!loopBars && loopBars.last - loopBars.first + 1 === LOOP_LENGTHS[i]));
+      guideBtn.textContent = `GUIDE DRUMS ${guideDrums ? 'ON' : 'OFF'}`;
+      guideBtn.classList.toggle('active', guideDrums);
     };
-    const loopLabel = h('span', { class: 'pill' }, 'LOOP: OFF');
-    const updateLoop = () => {
-      if (loopA !== null && loopB !== null && session) {
-        (session.cfg as { loop: { start: number; end: number } | null }).loop = { start: loopA, end: loopB };
-        loopLabel.textContent = `LOOP ${loopA.toFixed(1)}s → ${loopB.toFixed(1)}s`;
-        loopLabel.className = 'pill ok';
-      } else {
-        if (session) (session.cfg as { loop: { start: number; end: number } | null }).loop = null;
-        loopLabel.textContent = loopA !== null ? `LOOP A=${loopA.toFixed(1)}s (set B)` : 'LOOP: OFF';
-        loopLabel.className = 'pill';
-      }
-    };
-    const guideBtn = button(`GUIDE DRUMS: ${guideDrums ? 'ON' : 'OFF'}`, () => {
-      guideDrums = !guideDrums;
-      localStorage.setItem('dk.guideDrums', guideDrums ? '1' : '0');
-      toast('Guide drums will apply on restart', '');
-      guideBtn.textContent = `GUIDE DRUMS: ${guideDrums ? 'ON' : 'OFF'}`;
-    });
-    practiceBar.append(
-      button('−', () => setRate(rate - 0.05), 'icon'),
-      rateEl,
-      button('+', () => setRate(rate + 0.05), 'icon'),
-      button('« 5s', () => session && session.seek(Math.max(-1, session.chartTime - 5)), 'icon'),
-      button('5s »', () => session && session.seek(session.chartTime + 5), 'icon'),
-      button('SET A', () => { loopA = session ? Math.max(0, session.chartTime) : 0; loopB = null; updateLoop(); }, 'icon'),
-      button('SET B', () => { if (session && loopA !== null && session.chartTime > loopA + 1) { loopB = session.chartTime; updateLoop(); } }, 'icon'),
-      button('CLEAR', () => { loopA = loopB = null; updateLoop(); }, 'icon ghost'),
-      loopLabel,
+    practiceBar.replaceChildren(
+      group('SPEED', button('−', () => setRate(rate - 0.05), 'icon small'), rateEl, button('+', () => setRate(rate + 0.05), 'icon small')),
+      group('BAR', button('◀', () => stepBar(-1), 'icon small'), button('▶', () => stepBar(1), 'icon small')),
+      group('LOOP', ...loopBtns, loopLabel, clearLoop),
       guideBtn,
     );
+    refreshPractice();
   }
 
   function togglePause(): void {
@@ -360,18 +427,21 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     }
     session.pause();
     const st = session.judge.timingStats();
+    const late = st.mean > 0;
     const timingPanel = h(
       'div',
-      { class: 'panel tight', style: { textAlign: 'center' } },
+      { class: 'panel tight pause-timing' },
       h('div', { class: 'small dim' }, 'TIMING'),
-      h('div', { class: 'mono' }, st.count ? `You are hitting ${Math.round(Math.abs(st.mean) * 1000)} ms ${st.mean > 0 ? 'LATE' : 'EARLY'} on average (${st.count} hits)` : 'No hits yet'),
-      h('div', { class: 'small mute' }, `Input offset: ${Math.round(inputOffset * 1000)} ms · window ×${settings.hitWindowScale.toFixed(2)}`),
-      h('div', { class: 'btn-row', style: { justifyContent: 'center', marginTop: '8px' } },
-        button('−10 ms', () => { nudgeOffset(-10); togglePause(); togglePause(); }, 'icon'),
-        button('AUTO-FIX OFFSET', () => { autoFixOffset(); togglePause(); }, Math.abs(st.mean) > 0.02 && st.count >= 4 ? 'primary' : ''),
-        button('+10 ms', () => { nudgeOffset(10); togglePause(); togglePause(); }, 'icon'),
+      h('div', { class: 'mono' }, st.count ? `Averaging ${Math.round(Math.abs(st.mean) * 1000)} ms ${late ? 'LATE' : 'EARLY'} over ${st.count} hits` : 'No hits yet'),
+      h('div', { class: 'small mute' }, `Input offset ${Math.round(inputOffset * 1000)} ms · hit window ×${settings.hitWindowScale.toFixed(2)}`),
+      h('div', { class: 'btn-row nowrap' },
+        button('−10 ms', () => { nudgeOffset(-10); togglePause(); togglePause(); }, 'icon small'),
+        button('AUTO-FIX OFFSET', () => { autoFixOffset(); togglePause(); }, `small ${Math.abs(st.mean) > 0.02 && st.count >= 4 ? 'primary' : ''}`),
+        button('+10 ms', () => { nudgeOffset(10); togglePause(); togglePause(); }, 'icon small'),
       ),
     );
+    const k = (key: string) => h('kbd', null, key);
+    const canReview = session.judge.judgedCount > 0;
     pauseOverlay = h(
       'div',
       { class: 'pause-overlay' },
@@ -379,10 +449,12 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
         'div',
         { class: 'menu' },
         h('h2', { class: 'display' }, 'PAUSED'),
+        h('div', { class: 'small dim', style: { textAlign: 'center' } }, `${pkg.meta.title} · ${difficulty.toUpperCase()}${mode === 'practice' ? ` · ${Math.round(rate * 100)}%` : ''}${shownBar >= 1 && shownBar <= lastBar ? ` · bar ${shownBar} of ${lastBar}` : ''}`),
+        button([h('span', null, 'RESUME'), h('span', { class: 'hint' }, k('Esc'), ' ', k('↵'))], togglePause, 'primary'),
+        button([h('span', null, 'RESTART'), h('span', { class: 'hint' }, k('R'))], () => restart()),
+        mode === 'practice' && canReview ? button([h('span', null, 'END & REVIEW'), h('span', { class: 'hint' }, 'see where it slipped')], () => session?.finishNow()) : null,
+        button([h('span', null, 'QUIT'), h('span', { class: 'hint' }, k('Q'))], () => quit()),
         timingPanel,
-        button('RESUME', togglePause, 'primary'),
-        button('RESTART', () => restart()),
-        button('QUIT', () => quit()),
       ),
     );
     el.appendChild(pauseOverlay);
@@ -392,7 +464,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     session?.stop();
     recorder?.discard();
     recorder = null;
-    app.navigate('game', params);
+    app.navigate('game', { ...params, rate, loop: loopBars ?? undefined });
   }
 
   function quit(): void {
@@ -422,19 +494,39 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
           return undefined;
         });
     }
-    app.navigate('results', { pkg, difficulty, mode, summary, rate, timing: session?.judge.timingStats(), hits, windows, video, back: params?.back });
+    const notes: BarNote[] = (session?.judge.notes ?? []).map((n) => ({ time: n.time, judgement: n.judgement }));
+    app.navigate('results', { pkg, difficulty, mode, summary, rate, timing: session?.judge.timingStats(), hits, windows, video, back: params?.back, bars: { notes, starts, lastBar } });
   }
 
   const onKey = (e: KeyboardEvent) => {
+    if (typingInField(e) || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.code === 'Escape') {
       e.preventDefault();
       togglePause();
+    } else if (isDrumKey(e.code)) {
+      return;
+    } else if (pauseOverlay) {
+      if (e.code === 'Enter' && !(e.target as HTMLElement | null)?.closest?.('button')) togglePause();
+      else if (e.code === 'KeyR') restart();
+      else if (e.code === 'KeyQ') quit();
+      else return;
+      e.preventDefault();
     } else if (e.code === 'BracketLeft') {
       e.preventDefault();
       nudgeOffset(-10);
     } else if (e.code === 'BracketRight') {
       e.preventDefault();
       nudgeOffset(10);
+    } else if (mode === 'practice' && session) {
+      const digit = /^Digit([0-9])$/.exec(e.code);
+      if (e.code === 'ArrowUp') setRate(rate + 0.05);
+      else if (e.code === 'ArrowDown') setRate(rate - 0.05);
+      else if (e.code === 'ArrowLeft') stepBar(-1);
+      else if (e.code === 'ArrowRight') stepBar(1);
+      else if (digit && !e.repeat && LOOP_LENGTHS.includes(Number(digit[1]))) setLoop(Number(digit[1]));
+      else if (digit && !e.repeat && digit[1] === '0') setLoop(null);
+      else return;
+      e.preventDefault();
     }
   };
   window.addEventListener('keydown', onKey);
