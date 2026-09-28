@@ -13,7 +13,7 @@ type SettingsTab = 'timing' | 'audio' | 'lanes' | 'video' | 'data';
 const TABS: { id: SettingsTab; label: string; hint: string }[] = [
   { id: 'timing', label: 'TIMING', hint: 'calibration, hit windows' },
   { id: 'audio', label: 'SOUND & SCREEN', hint: 'volumes, motion, resolution' },
-  { id: 'lanes', label: 'LANES & KEYS', hint: 'highway order, keyboard' },
+  { id: 'lanes', label: 'LANES & CONTROLS', hint: 'highway order, pads, keyboard' },
   { id: 'video', label: 'VIDEO', hint: 'record your takes' },
   { id: 'data', label: 'PROFILE & DATA', hint: 'name, scores, devices' },
 ];
@@ -269,6 +269,8 @@ export function settingsScreen(app: App, params?: Record<string, unknown>): Scre
       h('h3', { style: { marginTop: 0 } }, 'Highway lanes (left → right)'),
       h('div', { class: 'small dim', style: { marginBottom: '10px' } }, 'Arrange the drums to match how your pads are laid out.'),
       laneEditor,
+      h('h3', null, 'Menus from the kit'),
+      toggle(s.padNavigation, 'Navigate menus with the pads: high tom ▲, mid tom ▼, floor tom twice = select, crash twice = back. Works after a short pause, so playing never moves the menu.', (on) => app.settingsStore.update({ padNavigation: on })),
       h('h3', null, 'Keyboard fallback'),
       h('div', { class: 'small dim', style: { marginBottom: '10px' } }, 'No pads handy? Play with the keyboard. Click SET then press a key (Esc cancels).'),
       keys,

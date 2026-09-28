@@ -5,6 +5,7 @@ import type { Difficulty, HighScore, HitWindows, ScoreSummary, SongPackage } fro
 import { h, button, fmtScore, pct, downloadBlob } from './dom';
 import { fileExtensionFor, type RecordedVideo } from '@/game/videoRecorder';
 import { topbar } from './topbar';
+import { attachPadNav, focusList } from './padNav';
 import { hitWindowsFor, starString, verdictFor } from '@/game/scoring';
 import { drawTimingHeatmap, timingSummary, type TimingHit } from '@/game/timingHeatmap';
 
@@ -212,10 +213,22 @@ export function resultsScreen(app: App, params?: Record<string, unknown>): Scree
   };
   window.addEventListener('keydown', onKey);
 
+  // Pads: ▲▼ through the actions (play again, practice the slipped bars…), crash ×2 to the song list.
+  const actionFocus = focusList(
+    () => Array.from(el.querySelectorAll<HTMLElement>('.btn')),
+    () => el.querySelector<HTMLElement>('.btn-row .btn.primary'),
+  );
+  const pads = attachPadNav(app, () => ({
+    ...actionFocus,
+    back: () => app.navigate(params?.back === 'studio' ? 'studio' : mode === 'practice' ? 'songs-practice' : 'songs'),
+    backLabel: params?.back === 'studio' ? 'STUDIO' : 'SONG LIST',
+  }));
+
   return {
     el,
     dispose: () => {
       window.removeEventListener('keydown', onKey);
+      pads.dispose();
       disposed = true;
       heatObserver?.disconnect();
       if (videoUrl) URL.revokeObjectURL(videoUrl);

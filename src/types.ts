@@ -285,6 +285,8 @@ export interface Settings {
   recordResolution: RecordResolution;
   /** Cap on highway canvas device pixels per CSS pixel: 2 = full Retina, 1.5 = ~half the pixels, 1 = lightest. */
   renderScale: RenderScale;
+  /** Drive menus from the kit: high tom / mid tom move, floor tom ×2 selects, crash ×2 goes back. */
+  padNavigation: boolean;
 }
 
 export type RenderScale = 1 | 1.5 | 2;
@@ -323,4 +325,5 @@ export const DEFAULT_SETTINGS: Settings = {
   recordRotate: false,
   recordResolution: 720,
   renderScale: 2,
+  padNavigation: true,
 };

@@ -60,6 +60,7 @@ export function mergeSettings(raw: unknown): Settings {
     recordRotate: typeof r.recordRotate === 'boolean' ? r.recordRotate : d.recordRotate,
     recordResolution: RECORD_RESOLUTIONS.includes(r.recordResolution as RecordResolution) ? (r.recordResolution as RecordResolution) : d.recordResolution,
     renderScale: RENDER_SCALES.includes(r.renderScale as RenderScale) ? (r.renderScale as RenderScale) : d.renderScale,
+    padNavigation: typeof r.padNavigation === 'boolean' ? r.padNavigation : d.padNavigation,
   };
   if (typeof r.lastDeviceKey === 'string' && r.lastDeviceKey) settings.lastDeviceKey = r.lastDeviceKey;
   if (typeof r.recordCameraId === 'string' && r.recordCameraId) settings.recordCameraId = r.recordCameraId;

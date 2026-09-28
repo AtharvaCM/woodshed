@@ -39,6 +39,7 @@ Switch `USBDrv` to `VENDOR` and install Roland's driver only when you want the m
 - **Song folders**: `song.json` + audio + one MIDI per difficulty + optional samples/artwork. Drag a zip onto the song list to import. Format: [docs/SONG-FORMAT.md](docs/SONG-FORMAT.md).
 - **Pad Setup wizard**: per-device bindings, presets for Roland V-Drums, Yamaha FGDP, generic 4×4 pads and General MIDI, live MIDI monitor with timestamp health.
 - **Performance video**: record webcam + highway + HUD in the browser (WebM). Handy for cover-video takes.
+- **Menus from the kit**: high tom ▲, mid tom ▼, floor tom twice = select, crash twice = back, on the title, song list, pause menu and results. Only after a short pause in playing, so grooves and fills never move the menu. Toggle in Settings → Lanes & Controls.
 - **Keyboard fallback** so the app runs with no hardware: `Space`/`B` kick, `F`/`J` snare, `D` hat closed, `S` hat open, `G`/`H`/`K` toms high/mid/low, `L` ride, `A`/`;` crash.
 
 ## Getting a song in
