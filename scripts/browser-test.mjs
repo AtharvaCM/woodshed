@@ -55,7 +55,8 @@ const evaluate = async (expression) => {
 };
 const shot = async (name) => { const r = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(path.join(outDir, name), Buffer.from(r.result.data, 'base64')); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const click = (text) => evaluate(`(() => { const b = Array.from(document.querySelectorAll('.btn')).find(b => b.textContent.trim() === ${JSON.stringify(text)}); if (!b) throw new Error('no button ' + ${JSON.stringify(text)}); b.click(); return true; })()`);
+/** Click the first .btn whose label (ignoring key hints and descriptions) is `text`. */
+const click = (text) => evaluate(`(() => { const label = (b) => { const c = b.cloneNode(true); c.querySelectorAll('kbd, .hint').forEach((k) => k.remove()); return c.textContent.trim(); }; const b = Array.from(document.querySelectorAll('.btn')).find(b => label(b) === ${JSON.stringify(text)}); if (!b) throw new Error('no button ' + ${JSON.stringify(text)}); b.click(); return true; })()`);
 function fail(msg) { console.error('✗', msg); cleanup(); setTimeout(() => process.exit(1), 800); throw new Error(msg); }
 function cleanup() { try { ws.close(); } catch { /* ignore */ } chrome.kill(); setTimeout(() => { try { fs.rmSync(profile, { recursive: true, force: true }); } catch { /* ignore */ } }, 500); }
 const assert = (cond, msg) => { if (!cond) fail(msg); console.log('✓', msg); };
@@ -76,7 +77,7 @@ try {
   await sleep(2000);
   assert((await evaluate(`document.querySelector('.logo')?.textContent`))?.includes('WOODSHED'), 'title screen renders');
   await shot('01-title.png');
-  await click('PLAYpick a song, chase the high score');
+  await click('PLAY');
   await sleep(2500);
   const songs = await evaluate(`Array.from(document.querySelectorAll('.songcard .title')).map(e => e.textContent)`);
   assert(songs.length >= 2, `song list shows bundled songs (${songs.join(', ')})`);
@@ -160,8 +161,29 @@ try {
   assert(heat && heat.w > 100 && heat.lit > 200, `results screen draws the timing heatmap (${heat ? heat.lit + ' lit px, ' + heat.legend : 'none'})`);
   await shot('07-heatmap.png');
 
+  // ── results → practice the bars that slipped: loop, speed and pause keys ──
+  const slips = await evaluate(`document.querySelectorAll('.bar-strip .cell:not(.empty)').length`);
+  assert(slips > 0, `results screen shows per-bar accuracy (${slips} bars judged)`);
+  await evaluate(`document.querySelector('.bar-strip .cell:not(.empty)').click()`);
+  await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyP', bubbles: true }))`);
+  await sleep(4000);
+  const prac = await evaluate(`JSON.stringify({ hash: location.hash, mode: dkSession.cfg.mode, loop: dkSession.cfg.loop, label: document.querySelector('.loop-label')?.textContent, rate: dkSession.transport.rate })`).then(JSON.parse);
+  assert(prac.hash === '#game' && prac.mode === 'practice' && prac.loop && /^BARS \d+–\d+$/.test(prac.label), `P on results practices the picked bars (${prac.label}, ${Math.round(prac.rate * 100)}%)`);
+  await evaluate(`['Digit2', 'ArrowUp'].forEach((code) => window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true })))`);
+  await sleep(200);
+  const keys2 = await evaluate(`JSON.stringify({ label: document.querySelector('.loop-label')?.textContent, rate: dkSession.transport.rate })`).then(JSON.parse);
+  const [a, b] = keys2.label.replace('BARS ', '').split('–').map(Number);
+  assert(b - a === 1 && Math.abs(keys2.rate - prac.rate - 0.05) < 1e-6, `practice keys: 2 loops two bars (${keys2.label}), ↑ speeds up to ${Math.round(keys2.rate * 100)}%`);
+  await shot('07b-practice.png');
+  await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', bubbles: true }))`);
+  await sleep(300);
+  await shot('07c-pause.png');
+  await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyQ', bubbles: true }))`);
+  await sleep(800);
+  assert((await evaluate(`location.hash`)) === '#songs-practice', 'Q in the pause menu quits to the practice song list');
+
   // ── studio: record onto the chart in the editor ──
-  await click('TITLE');
+  await click('BACK');
   await sleep(500);
   await evaluate(`window.dk.navigate('studio')`);
   await sleep(1500);

@@ -1,6 +1,6 @@
 import type { App, Screen } from '@/app';
 import { DRUM_VOICES, VOICE_LABELS, type DrumVoice } from '@/types';
-import { h, button, field, select, toast, clear, downloadBlob, pickFile } from './dom';
+import { h, button, field, select, toast, clear, downloadBlob, pickFile, fmtAgo } from './dom';
 import { openCamera, videoRecordingSupported } from '@/game/videoRecorder';
 import { topbar } from './topbar';
 import { VOICE_COLORS } from '@/game/renderer';
@@ -9,8 +9,19 @@ import { DIFFICULTIES, LANE_LABELS, type Lane, type RenderScale } from '@/types'
 import { LANE_COLORS } from '@/game/renderer';
 import { Metronome, Transport } from '@/audio';
 
-export function settingsScreen(app: App): Screen {
+type SettingsTab = 'timing' | 'audio' | 'lanes' | 'video' | 'data';
+const TABS: { id: SettingsTab; label: string; hint: string }[] = [
+  { id: 'timing', label: 'TIMING', hint: 'calibration, hit windows' },
+  { id: 'audio', label: 'SOUND & SCREEN', hint: 'volumes, motion, resolution' },
+  { id: 'lanes', label: 'LANES & KEYS', hint: 'highway order, keyboard' },
+  { id: 'video', label: 'VIDEO', hint: 'record your takes' },
+  { id: 'data', label: 'PROFILE & DATA', hint: 'name, scores, devices' },
+];
+
+export function settingsScreen(app: App, params?: Record<string, unknown>): Screen {
   const s = app.settings;
+  let tab: SettingsTab = (params?.tab as SettingsTab) ?? (localStorage.getItem('dk.settingsTab') as SettingsTab | null) ?? 'timing';
+  if (!TABS.some((t) => t.id === tab)) tab = 'timing';
   const num = (v: number, step: number, min: number, max: number, onChange: (n: number) => void) => {
     const input = h('input', { class: 'input', type: 'number', step, min, max, value: v, onChange: (e: Event) => onChange(Number((e.target as HTMLInputElement).value)) });
     return input;
@@ -69,7 +80,7 @@ export function settingsScreen(app: App): Screen {
       const chip = h('div', { class: 'voice-chip', style: { '--v': VOICE_COLORS[voice] } },
         h('div', { class: 'name' }, VOICE_LABELS[voice]),
         h('div', { class: 'pads' }, (kb[voice] ?? []).map((c) => c.replace('Key', '').replace('Digit', '')).join(' · ') || '—'),
-        h('div', { class: 'btn-row' }, button('SET', () => captureKey(voice), 'icon small'), button('CLEAR', () => { app.settingsStore.update({ keyboard: { ...app.settings.keyboard, [voice]: [] } }); renderKeys(); }, 'icon ghost small')),
+        h('div', { class: 'btn-row tight' }, button('SET', () => captureKey(voice), 'icon small'), button('CLEAR', () => { app.settingsStore.update({ keyboard: { ...app.settings.keyboard, [voice]: [] } }); renderKeys(); }, 'icon ghost small')),
       );
       keys.appendChild(chip);
     }
@@ -96,11 +107,16 @@ export function settingsScreen(app: App): Screen {
   const calib = h('div', { class: 'panel tight' });
   function renderCalib(result?: { mean: number; n: number }): void {
     clear(calib);
+    const at = Number(localStorage.getItem('dk.calibratedAt')) || 0;
     calib.append(
       h('h3', { style: { marginTop: 0 } }, 'Latency calibration'),
-      h('div', { class: 'small dim' }, 'Plays 12 clicks at 120 BPM. Hit any pad (or key) exactly on each click. We measure the average delay and set the input offset for you.'),
-      result ? h('div', { style: { marginTop: '8px' } }, h('span', { class: 'pill ok' }, `avg ${(result.mean * 1000).toFixed(0)} ms over ${result.n} hits`)) : '',
-      h('div', { class: 'btn-row', style: { marginTop: '10px' } }, button('RUN CALIBRATION', runCalibration, 'primary')),
+      h('div', { class: 'small dim' }, 'Plays 12 clicks at 120 BPM. Hit any pad (or key) exactly on each click. We measure the average delay and set the input offset for you. Re-run whenever you change speakers, headphones or cables.'),
+      h('div', { class: 'row', style: { marginTop: '10px', gap: '10px' } },
+        button('RUN CALIBRATION', runCalibration, 'primary'),
+        result
+          ? h('span', { class: 'pill ok' }, `hits averaged ${(result.mean * 1000).toFixed(0)} ms over ${result.n} clicks`)
+          : at ? h('span', { class: 'small dim' }, `Last run ${fmtAgo(at)}`) : h('span', { class: 'pill warn' }, 'Not run yet'),
+      ),
     );
   }
   async function runCalibration(): Promise<void> {
@@ -145,6 +161,7 @@ export function settingsScreen(app: App): Screen {
     const mean = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
     // player hits late by `mean` → subtract it from their timing
     app.settingsStore.update({ inputOffset: -mean });
+    localStorage.setItem('dk.calibratedAt', String(Date.now()));
     offsetInput.value = String(Math.round(-mean * 1000));
     renderCalib({ mean, n: deltas.length });
     toast(`Input offset set to ${Math.round(-mean * 1000)} ms (${deltas.length}/${received} hits used${fallbacks ? ', hardware timestamps ignored' : ''})`, 'ok', 5000);
@@ -209,74 +226,86 @@ export function settingsScreen(app: App): Screen {
       ]
     : [h('div', { class: 'small dim' }, 'This browser cannot record video (needs MediaRecorder, canvas capture and camera access). Try Chrome, Edge or Firefox.')];
 
+  const toggle = (checked: boolean, label: string, onChange: (on: boolean) => void) =>
+    h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked, onChange: (e: Event) => onChange((e.target as HTMLInputElement).checked) }), label);
+
+  const sections: Record<SettingsTab, HTMLElement[]> = {
+    timing: [
+      calib,
+      h('h3', null, 'Input offset'),
+      field('Offset (ms)', offsetInput, 'Positive = your hits are judged earlier. Negative = later. Calibration sets this for you; in-game, [ and ] nudge it by 10 ms.'),
+      h('h3', null, 'How forgiving'),
+      field('Hit window size', range(s.hitWindowScale, 0.5, 3, 0.05, (v) => { app.settingsStore.update({ hitWindowScale: v }); renderWindows(); }), '1.0 = arcade-tight. Bigger = more forgiving. Applies to perfect / great / good equally.'),
+      h('div', { class: 'btn-row', style: { margin: '0 0 8px' } }, ...[['TIGHT', 1], ['NORMAL', 1.5], ['LOOSE', 2.2], ['VERY LOOSE', 3]].map(([label, v]) => button(String(label), () => { app.settingsStore.update({ hitWindowScale: Number(v) }); app.navigate('settings'); }, 'icon small'))),
+      windowsTable,
+      h('div', { style: { height: '14px' } }),
+      toggle(s.strictVoices, 'Strict drums on hard/expert (open vs closed hat, which tom). Off = any drum on the same lane counts.', (on) => app.settingsStore.update({ strictVoices: on })),
+      h('h3', null, 'Highway speed'),
+      field('Seconds of highway visible', range(s.scrollWindow, 0.8, 3, 0.1, (v) => app.settingsStore.update({ scrollWindow: v })), 'Shorter = notes move faster and sit closer together.'),
+    ],
+    audio: [
+      h('h3', { style: { marginTop: 0 } }, 'Volume'),
+      field('Song volume', range(s.songVolume, 0, 1, 0.01, (v) => app.settingsStore.update({ songVolume: v }))),
+      field('Drum volume', range(s.drumVolume, 0, 1, 0.01, (v) => app.settingsStore.update({ drumVolume: v }))),
+      toggle(s.drumSoundsOnHit, 'Play drum samples when I hit a pad (turn off if your module makes its own sound, e.g. the TD-07 with Local Control on)', (on) => app.settingsStore.update({ drumSoundsOnHit: on })),
+      h('h3', null, 'Screen'),
+      toggle(s.reducedMotion, 'Reduced motion (no shake / particles)', (on) => app.settingsStore.update({ reducedMotion: on })),
+      h('div', { style: { height: '12px' } }),
+      field(
+        'Highway resolution',
+        select(
+          [
+            { value: '2', label: '2× (full Retina)' },
+            { value: '1.5', label: '1.5× (about half the pixels)' },
+            { value: '1', label: '1× (lightest)' },
+          ],
+          String(s.renderScale),
+          (v) => app.settingsStore.update({ renderScale: Number(v) as RenderScale }),
+        ),
+        'Lower this if the highway stutters on a Retina display. Takes effect on the next song.',
+      ),
+    ],
+    lanes: [
+      h('h3', { style: { marginTop: 0 } }, 'Highway lanes (left → right)'),
+      h('div', { class: 'small dim', style: { marginBottom: '10px' } }, 'Arrange the drums to match how your pads are laid out.'),
+      laneEditor,
+      h('h3', null, 'Keyboard fallback'),
+      h('div', { class: 'small dim', style: { marginBottom: '10px' } }, 'No pads handy? Play with the keyboard. Click SET then press a key (Esc cancels).'),
+      keys,
+    ],
+    video: [h('h3', { style: { marginTop: 0 } }, 'Performance video'), ...videoPanel],
+    data: [
+      h('h3', { style: { marginTop: 0 } }, 'Player'),
+      field('Name (for high scores)', h('input', { class: 'input', value: s.playerName, maxLength: 16, onChange: (e: Event) => app.settingsStore.update({ playerName: (e.target as HTMLInputElement).value.trim().toUpperCase() || 'PLAYER' }) })),
+      h('h3', null, 'Scores'),
+      h('div', { class: 'btn-row' },
+        button('EXPORT SCORES', () => downloadBlob(new Blob([app.scores.exportJson()], { type: 'application/json' }), 'woodshed-scores.json')),
+        button('IMPORT SCORES', async () => { const [f] = await pickFile('.json'); if (!f) return; const r = app.scores.importJson(await f.text()); toast(`Imported ${r.imported} scores`, 'ok'); }),
+        button('RESET ALL SCORES', () => { if (confirm('Delete ALL high scores?')) { app.scores.clear(); toast('Scores cleared'); } }, 'danger'),
+      ),
+      h('h3', null, 'Saved pad setups'),
+      h('div', { class: 'small dim' }, app.devices.list().length ? app.devices.list().map((d) => h('div', { class: 'row', style: { marginBottom: '6px' } }, h('span', { class: 'pill' }, d.deviceName), h('span', { class: 'mute' }, `${Object.values(d.bindings).flat().length} pads`), button('DELETE', () => { app.devices.remove(d.deviceKey); app.navigate('settings'); }, 'icon ghost small'))) : 'No saved pad setups yet.'),
+      h('h3', null, 'Start over'),
+      h('div', { class: 'btn-row' }, button('RESET SETTINGS', () => { if (confirm('Reset every setting to its default (including input offset)?')) { app.settingsStore.reset(); app.navigate('settings'); } }, 'danger')),
+    ],
+  };
+
+  const tabBar = h('div', { class: 'tabs settings-tabs' });
+  const pane = h('div', { class: 'panel settings-pane' });
+  function showTab(next: SettingsTab): void {
+    if (tab === 'video' && next !== 'video') stopCamTest();
+    tab = next;
+    localStorage.setItem('dk.settingsTab', tab);
+    tabBar.replaceChildren(...TABS.map((t) => h('div', { class: `tab ${t.id === tab ? 'active' : ''}`, role: 'tab', tabIndex: 0, onClick: () => showTab(t.id), onKeydown: (e: KeyboardEvent) => { if (e.key === 'Enter') showTab(t.id); } }, h('span', { class: 'label' }, t.label), h('span', { class: 'hint' }, t.hint))));
+    pane.replaceChildren(...sections[tab]);
+  }
+  showTab(tab);
+
   const el = h(
     'div',
     { class: 'screen' },
     topbar(app, 'SETTINGS', button('BACK', () => app.navigate('title'), 'ghost')),
-    h(
-      'div',
-      { class: 'screen-body' },
-      h(
-        'div',
-        { class: 'grid-2', style: { maxWidth: '1100px', margin: '0 auto' } },
-        h(
-          'div',
-          { class: 'panel' },
-          h('h3', { style: { marginTop: 0 } }, 'Player'),
-          field('Name (for high scores)', h('input', { class: 'input', value: s.playerName, maxLength: 16, onChange: (e: Event) => app.settingsStore.update({ playerName: (e.target as HTMLInputElement).value.trim().toUpperCase() || 'PLAYER' }) })),
-          h('h3', null, 'Timing'),
-          field('Input offset (ms)', offsetInput, 'Positive = your hits are judged earlier. Negative = later. Use calibration below if unsure.'),
-          field('Highway length (seconds visible)', range(s.scrollWindow, 0.8, 3, 0.1, (v) => app.settingsStore.update({ scrollWindow: v })), 'Shorter = faster notes.'),
-          field('Hit window size', range(s.hitWindowScale, 0.5, 3, 0.05, (v) => { app.settingsStore.update({ hitWindowScale: v }); renderWindows(); }), '1.0 = arcade-tight. Bigger = more forgiving. Applies to perfect / great / good equally.'),
-          windowsTable,
-          h('div', { class: 'btn-row', style: { margin: '6px 0 12px' } }, ...[['TIGHT', 1], ['NORMAL', 1.5], ['LOOSE', 2.2], ['VERY LOOSE', 3]].map(([label, v]) => button(String(label), () => { app.settingsStore.update({ hitWindowScale: Number(v) }); app.navigate('settings'); }, 'icon small'))),
-          h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: s.strictVoices, onChange: (e: Event) => app.settingsStore.update({ strictVoices: (e.target as HTMLInputElement).checked }) }), 'Strict drums on hard/expert (open vs closed hat, which tom). Off = any drum on the same lane counts.'),
-          h('div', { style: { height: '8px' } }),
-          h('div', { style: { marginTop: '12px' } }, calib),
-          h('h3', null, 'Audio'),
-          field('Song volume', range(s.songVolume, 0, 1, 0.01, (v) => app.settingsStore.update({ songVolume: v }))),
-          field('Drum volume', range(s.drumVolume, 0, 1, 0.01, (v) => app.settingsStore.update({ drumVolume: v }))),
-          h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: s.drumSoundsOnHit, onChange: (e: Event) => app.settingsStore.update({ drumSoundsOnHit: (e.target as HTMLInputElement).checked }) }), 'Play drum samples when I hit a pad (turn off if your FGDP makes its own sound)'),
-          h('div', { style: { height: '8px' } }),
-          h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: s.reducedMotion, onChange: (e: Event) => app.settingsStore.update({ reducedMotion: (e.target as HTMLInputElement).checked }) }), 'Reduced motion (no shake / particles)'),
-          h('div', { style: { height: '8px' } }),
-          field(
-            'Highway resolution',
-            select(
-              [
-                { value: '2', label: '2× (full Retina)' },
-                { value: '1.5', label: '1.5× (about half the pixels)' },
-                { value: '1', label: '1× (lightest)' },
-              ],
-              String(s.renderScale),
-              (v) => app.settingsStore.update({ renderScale: Number(v) as RenderScale }),
-            ),
-            'Lower this if the highway stutters on a Retina display. Takes effect on the next song.',
-          ),
-        ),
-        h(
-          'div',
-          { class: 'panel' },
-          h('h3', { style: { marginTop: 0 } }, 'Highway lanes (left → right)'),
-          h('div', { class: 'small dim', style: { marginBottom: '10px' } }, 'Arrange the drums to match how your pads are laid out.'),
-          laneEditor,
-          h('h3', null, 'Keyboard fallback'),
-          h('div', { class: 'small dim', style: { marginBottom: '10px' } }, 'No pads handy? Play with the keyboard. Click SET then press a key.'),
-          keys,
-          h('h3', null, 'Performance video'),
-          ...videoPanel,
-          h('h3', null, 'Data'),
-          h('div', { class: 'btn-row' },
-            button('EXPORT SCORES', () => downloadBlob(new Blob([app.scores.exportJson()], { type: 'application/json' }), 'woodshed-scores.json')),
-            button('IMPORT SCORES', async () => { const [f] = await pickFile('.json'); if (!f) return; const r = app.scores.importJson(await f.text()); toast(`Imported ${r.imported} scores`, 'ok'); }),
-            button('RESET ALL SCORES', () => { if (confirm('Delete ALL high scores?')) { app.scores.clear(); toast('Scores cleared'); } }, 'danger'),
-            button('RESET SETTINGS', () => { app.settingsStore.reset(); app.navigate('settings'); }, 'danger'),
-          ),
-          h('h3', null, 'Devices'),
-          h('div', { class: 'small dim' }, app.devices.list().length ? app.devices.list().map((d) => h('div', { class: 'row', style: { marginBottom: '6px' } }, h('span', { class: 'pill' }, d.deviceName), h('span', { class: 'mute' }, `${Object.values(d.bindings).flat().length} pads`), button('DELETE', () => { app.devices.remove(d.deviceKey); app.navigate('settings'); }, 'icon ghost small'))) : 'No saved pad setups yet.'),
-        ),
-      ),
-    ),
+    h('div', { class: 'screen-body' }, h('div', { class: 'settings-wrap' }, tabBar, pane)),
   );
   return { el, dispose: stopCamTest };
 }

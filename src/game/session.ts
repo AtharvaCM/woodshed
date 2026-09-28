@@ -93,10 +93,12 @@ export class GameSession {
     }
     this.beats = computeBeats(cfg.chart, this.audioDuration - cfg.meta.offset);
     this.judge.onEvent((ev) => this.handleJudge(ev));
-    if (cfg.mode === 'practice' && cfg.guideDrums) {
+    if (cfg.mode === 'practice') {
+      // Always built in practice so guide drums can be switched on and off mid-take.
       this.guide = new ChartPlayer(engine, kit, this.transport);
       this.guide.setNotes(cfg.chart.notes);
       this.guide.setOffset(cfg.meta.offset);
+      this.guide.setEnabled(!!cfg.guideDrums);
     }
     // Compensate for audio output latency: what the player hears is later than the audio clock.
     this.latencyComp = engine.inputLatencyCompensation;
@@ -174,6 +176,19 @@ export class GameSession {
 
   setRate(rate: number): void {
     this.transport.setRate(rate);
+    this.guide?.resync();
+  }
+
+  /** Practice: play the chart's drums along with the song (takes effect immediately). */
+  setGuideDrums(on: boolean): void {
+    (this.cfg as { guideDrums?: boolean }).guideDrums = on;
+    this.guide?.setEnabled(on);
+    this.guide?.resync();
+  }
+
+  /** Practice: loop a region (chart seconds), or null to play through. */
+  setLoop(loop: { start: number; end: number } | null): void {
+    (this.cfg as { loop?: { start: number; end: number } | null }).loop = loop;
   }
 
   /** Live-adjust the input offset (seconds) — affects hits from now on. */

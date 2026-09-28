@@ -114,9 +114,14 @@ export class App {
     this.screens.set(name, factory);
   }
 
+  /** Name of the screen on show (or being built). */
+  currentName = '';
+
   async navigate(name: string, params?: Record<string, unknown>): Promise<void> {
     const factory = this.screens.get(name);
     if (!factory) throw new Error(`Unknown screen ${name}`);
+    const from = this.currentName;
+    this.currentName = name;
     this.current?.dispose?.();
     this.current = null;
     // clear all but the backdrop
@@ -126,6 +131,22 @@ export class App {
     const screen = await factory(this, params);
     this.current = screen;
     this.root.appendChild(screen.el);
-    location.hash = name;
+    // Game and results only make sense with params, so whatever follows them takes over their history
+    // entry: browser Back from results lands on the song list, never on a dead #game. Re-rendering the
+    // same screen replaces too.
+    if (TRANSIENT_SCREENS.has(from) || name === from) history.replaceState(null, '', `#${name}`);
+    else location.hash = name;
   }
+}
+
+/** Screens that need navigate() params and cannot be reached from the URL. */
+const TRANSIENT_SCREENS = new Set(['game', 'results']);
+
+/** Screens browser Back/Forward and deep links may open. */
+export const LINKABLE_SCREENS = ['title', 'songs', 'songs-practice', 'wizard', 'settings', 'studio'];
+
+/** True when a keyboard shortcut should be ignored because the user is typing. */
+export function typingInField(e: KeyboardEvent): boolean {
+  const t = e.target as HTMLElement | null;
+  return !!t && (t.isContentEditable || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT');
 }

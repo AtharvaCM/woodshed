@@ -86,6 +86,17 @@ export function fmtTime(sec: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/** "just now", "5 min ago", "3 h ago", "2 days ago" for an epoch-ms timestamp. */
+export function fmtAgo(at: number, now = Date.now()): string {
+  const min = Math.max(0, Math.round((now - at) / 60_000));
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr} h ago`;
+  const days = Math.round(hr / 24);
+  return days === 1 ? 'yesterday' : `${days} days ago`;
+}
+
 export function fmtScore(n: number): string {
   return n.toLocaleString('en-US');
 }
