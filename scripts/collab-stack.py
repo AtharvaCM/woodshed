@@ -12,8 +12,9 @@ drums alone (built from the clip with demucs). sync.json:
   guide_drums  kit-relative WAV: the drums the band played to (used only for syncing)
   panels       [{name, crop: [w, h, x, y]}] rows to cut from the clip, top to bottom
 
---drums-audio  the kit's own audio (e.g. TD-07 over USB), recorded while playing along to the kit's
-               reference WAV and exported from the start of that reference. The clip then begins
+--drums-audio  the kit's own audio, recorded while playing along to the kit's reference WAV and
+               starting where that reference starts: scripts/drum-take.swift record + render does
+               this with no driver or DAW (or a DAW export from the reference's first sample). The clip then begins
                sync.json's reference_band_start_s into it; onset matching against the guide drums
                only fine-tunes that by up to ±0.25 s. (A free search can't be trusted: a groove
                repeats every bar, so matches one or two bars off score almost as well.)
