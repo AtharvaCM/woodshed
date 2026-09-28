@@ -37,6 +37,7 @@ ap.add_argument('--drums-video', required=True)
 ap.add_argument('--out')
 ap.add_argument('--drums-audio-offset', type=float)
 ap.add_argument('--drums-video-offset', type=float)
+ap.add_argument('--cam-crop', help='w:h:x:y region of the camera frame to fill the drums row with (default: centre crop)')
 ap.add_argument('--drums-gain-db', type=float, default=0.0, help='drums level relative to the band before loudness normalisation')
 a = ap.parse_args()
 
@@ -103,7 +104,7 @@ with tempfile.TemporaryDirectory() as tmp:
         w, h, x, y0 = p['crop']
         fc += f'[0:v]crop={w}:{h}:{x}:{y0},scale={ROW_W}:{ROW_H}:force_original_aspect_ratio=increase,crop={ROW_W}:{ROW_H},setsar=1[p{i}];'
         rows.append(f'[p{i}]')
-    cam = f'[1:v]trim=start={max(0.0, video_start):.4f},setpts=PTS-STARTPTS,scale={ROW_W}:{ROW_H}:force_original_aspect_ratio=increase,crop={ROW_W}:{ROW_H},setsar=1'
+    cam = f'[1:v]trim=start={max(0.0, video_start):.4f},setpts=PTS-STARTPTS,' + (f'crop={a.cam_crop},' if a.cam_crop else '') + f'scale={ROW_W}:{ROW_H}:force_original_aspect_ratio=increase,crop={ROW_W}:{ROW_H},setsar=1'
     if video_start < 0:
         cam += f',tpad=start_duration={-video_start:.4f}:color=black'
     fc += cam + '[cam];'
