@@ -77,6 +77,8 @@ Then:
 
 `tools/` and `.venv/` are gitignored. Model weights land in `~/.cache`.
 
+Adding your drums to someone's collab clip: `scripts/collab-stack.py` stacks the clip's player panels and your camera into one 1080-wide portrait video with a fresh mix. It works from a kit folder (`sync.json`, the band's audio with its guide drums removed by demucs, and those guide drums alone). Your TD-07 take and camera are synced automatically; see the script's header for the recording workflow.
+
 ## Project layout
 
 ```

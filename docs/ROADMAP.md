@@ -41,6 +41,7 @@ Songs-first. Every phase ends with something playable on the TD-07.
 ## Phase 5 — collab video (drums + bass + lead guitar, instrumental)
 
 - [ ] Reference file for the band: 2-bar count-in click + drumless mix at 108 BPM, 44.1 kHz / 24-bit WAV.
+- [ ] 2026-09-28: the band went first — a 76 s guitar + bass clip over a quiet guide-drum track, sitting at album 70.82 s (bars 33–66, no drift, their timing within ±7 ms of the album grid). Kit in `audio/collab/labon-ko-bars33-66/` (practice song zip, 2-bar count-in reference WAV, band without guide drums); `scripts/collab-stack.py` builds the 3-up from the TD-07 take + camera. Next: record the drums.
 - [ ] Capture: `USBDrv = VENDOR` + Roland driver 1.0.2 → GarageBand audio + MIDI tracks; slate with a clap and a rimshot. Backing track stays out of the USB stream (clean stem).
 - [ ] Edit in DaVinci Resolve (free): waveform auto-sync, 3-up grid. Upload unlisted first; expect a T-Series Content ID claim set to Monetize.
 
