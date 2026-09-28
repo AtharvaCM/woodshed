@@ -31,6 +31,8 @@ ap.add_argument('--charter', default='woodshed pipeline')
 ap.add_argument('--genre')
 ap.add_argument('--preview-start', type=float)
 ap.add_argument('--accent')
+ap.add_argument('--quantize', type=int, default=0, metavar='N', help='snap note starts to the nearest 1/N note of the constant grid (16 = sixteenths). Transcribed onsets jitter 20-40 ms; the difficulty deriver only keeps notes within ~1/32 beat of the grid, so unquantized charts collapse on easy/medium')
+ap.add_argument('--max-snap', type=float, default=0.06, help='seconds; notes further than this from a grid line are left where they are')
 ap.add_argument('--fold-open-hats', action='store_true', help='write open hi-hat (46) as closed (42); transcribers often call every accented 16th "open"')
 ap.add_argument('--out', required=True)
 a = ap.parse_args()
@@ -42,10 +44,19 @@ dropped = sum(1 for n in notes if n.start < a.offset)
 out = pretty_midi.PrettyMIDI(initial_tempo=a.bpm, resolution=480)
 drums = pretty_midi.Instrument(program=0, is_drum=True, name='WOODSHED')
 beat = 60 / a.bpm
+snapped = 0
+snap_err = []
 for n in notes:
     t = n.start - a.offset
     if t < 0:
         continue
+    if a.quantize:
+        step = beat * 4 / a.quantize
+        g = round(t / step) * step
+        if abs(g - t) <= a.max_snap:
+            snap_err.append(g - t)
+            t = g
+            snapped += 1
     pitch = 42 if (a.fold_open_hats and n.pitch == 46) else n.pitch
     drums.notes.append(pretty_midi.Note(velocity=max(1, min(127, int(n.velocity))), pitch=pitch, start=t, end=t + beat / 8))
 out.instruments.append(drums)
@@ -87,4 +98,7 @@ with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
     for f in sorted(os.listdir(a.out)):
         z.write(os.path.join(a.out, f), f)
 print(f"{len(drums.notes)} notes written ({dropped} before offset dropped); folder {a.out}; zip {zip_path}")
+if a.quantize:
+    import statistics
+    print(f"quantized to 1/{a.quantize}: {snapped} snapped, mean shift {statistics.mean(snap_err)*1000:+.1f} ms, max |shift| {max(abs(x) for x in snap_err)*1000:.1f} ms, {len(drums.notes)-snapped} left unsnapped (> {a.max_snap*1000:.0f} ms off grid)")
 print(json.dumps(meta, indent=2, ensure_ascii=False))
