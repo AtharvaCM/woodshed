@@ -2,6 +2,7 @@ import type { App, Screen } from '@/app';
 import { typingInField } from '@/app';
 import { DRUM_VOICES, VOICE_LABELS, type Difficulty, type SongListEntry } from '@/types';
 import { h, button, clear, fmtAgo, pct, toast } from './dom';
+import { attachPadNav, focusList } from './padNav';
 
 /** One line of the "ready to play?" checklist: a status dot, what it is, and what to do about it. */
 function checkRow(state: 'ok' | 'warn' | 'bad' | 'idle', label: string, detail: string, action?: { label: string; run: () => void }): HTMLElement {
@@ -54,6 +55,7 @@ export function titleScreen(app: App): Screen {
   async function connect(): Promise<void> {
     await app.boot();
     refreshChecks();
+    pads.refresh();
     if (app.input.midi.ready && !app.input.midi.ports().length) toast('MIDI is on, but no device is plugged in', 'bad');
   }
 
@@ -124,6 +126,13 @@ export function titleScreen(app: App): Screen {
   };
   window.addEventListener('keydown', onKey);
 
+  // Pads: ▲▼ move through the resume card and the menu, floor tom ×2 opens the ringed item.
+  const menuFocus = focusList(
+    () => Array.from(el.querySelectorAll<HTMLElement>('.resume .btn, .menu .btn')),
+    () => el.querySelector<HTMLElement>('.resume .btn.primary') ?? el.querySelector<HTMLElement>('.menu .btn.primary'),
+  );
+  const pads = attachPadNav(app, () => menuFocus);
+
   const el = h(
     'div',
     { class: 'screen' },
@@ -154,6 +163,7 @@ export function titleScreen(app: App): Screen {
     el,
     dispose: () => {
       unsub();
+      pads.dispose();
       window.removeEventListener('keydown', onKey);
     },
   };

@@ -4,6 +4,7 @@ import { type Difficulty, type SongListEntry, type SongPackage } from '@/types';
 import { loadSongFromZip, loadSongFromFiles, availableDifficulties, playableDifficulties } from '@/song';
 import { h, append, button, toast, pickFile, pickFolder, clear, fmtScore, fmtTime } from './dom';
 import { topbar } from './topbar';
+import { attachPadNav } from './padNav';
 import { drawProceduralArt } from './artwork';
 import { applySongKit } from './game';
 import { starString } from '@/game/scoring';
@@ -276,6 +277,18 @@ export function songSelectScreen(app: App, params?: Record<string, unknown>): Sc
   };
   window.addEventListener('keydown', onKey);
 
+  // Pads: ▲▼ change song, floor tom ×2 starts it, crash ×2 back to the title.
+  const pads = attachPadNav(app, () => ({
+    prev: () => selectBy(-1),
+    next: () => selectBy(1),
+    select: () => {
+      if (selected && playableDifficulties(selected.meta).length) play(selected, practice ? 'practice' : 'play');
+    },
+    selectLabel: () => (practice ? `PRACTICE ${Math.round(rate * 100)}%` : 'PLAY'),
+    back: () => app.navigate('title'),
+    backLabel: 'TITLE',
+  }));
+
   const el = h(
     'div',
     { class: 'screen' },
@@ -303,6 +316,7 @@ export function songSelectScreen(app: App, params?: Record<string, unknown>): Sc
       previewToken++;
       unsubHits();
       window.removeEventListener('keydown', onKey);
+      pads.dispose();
       window.removeEventListener('dragover', onDragOver);
       window.removeEventListener('dragleave', onDragLeave);
       window.removeEventListener('drop', onDrop);

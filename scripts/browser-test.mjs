@@ -77,6 +77,31 @@ try {
   await sleep(2000);
   assert((await evaluate(`document.querySelector('.logo')?.textContent`))?.includes('WOODSHED'), 'title screen renders');
   await shot('01-title.png');
+
+  // ── menus from the kit: injected MIDI hits (high tom 48 ▲, mid tom 45 ▼, floor tom 43 ×2 select, crash 49 ×2 back) ──
+  await evaluate(`(() => {
+    const none = { kick: [], snare: [], tomHigh: [{ note: 48, channel: -1 }], tomMid: [{ note: 45, channel: -1 }], tomLow: [{ note: 43, channel: -1 }], hihatClosed: [], hihatOpen: [], ride: [], crash: [{ note: 49, channel: -1 }] };
+    window.dk.input.setDevice({ deviceKey: 'E2E Kit', deviceName: 'E2E Kit', bindings: none, velocityThreshold: 1, createdAt: 0, updatedAt: 0 });
+    let t = performance.now();
+    window.__pads = (notes) => { t += 1000; for (const [note, gap] of notes) { t += gap; window.dk.input.onRaw({ note, channel: 9, velocity: 100, timeStamp: t, skew: 0, timeStampFallback: false, portId: 'e2e', portName: 'E2E Kit' }); } };
+  })()`);
+  await evaluate(`window.__pads([[45, 0]])`);
+  assert(await evaluate(`document.querySelector('.menu .btn.pad-focus')?.textContent.includes('PLAY')`), 'pads: first mid-tom hit rings PLAY on the title menu');
+  await evaluate(`window.__pads([[43, 0]])`);
+  assert(await evaluate(`!!document.querySelector('.pad-prompt:not([hidden])')`), 'pads: one floor-tom hit asks for a second');
+  await shot('01b-pad-nav.png');
+  await evaluate(`window.__pads([[43, 0], [43, 300]])`);
+  await sleep(1500);
+  assert((await evaluate(`location.hash`)) === '#songs', 'pads: floor tom twice opens the song list');
+  const firstSong = await evaluate(`document.querySelector('.songcard.selected .title')?.textContent`);
+  await evaluate(`window.__pads([[45, 0]])`);
+  await sleep(300);
+  const nextSong = await evaluate(`document.querySelector('.songcard.selected .title')?.textContent`);
+  assert(nextSong && nextSong !== firstSong, `pads: mid tom moves to the next song (${firstSong} → ${nextSong})`);
+  await evaluate(`window.__pads([[49, 0], [49, 300]])`);
+  await sleep(800);
+  assert((await evaluate(`location.hash`)) === '#title', 'pads: crash twice goes back to the title');
+  await evaluate(`window.dk.input.setDevice(null)`);
   await click('PLAY');
   await sleep(2500);
   const songs = await evaluate(`Array.from(document.querySelectorAll('.songcard .title')).map(e => e.textContent)`);

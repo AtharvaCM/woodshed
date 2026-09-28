@@ -6,6 +6,7 @@ import { getChartBlob } from '@/song';
 import { GameSession, computeBeats, type GameMode } from '@/game/session';
 import { barAt, barSpan, barStarts, type BarNote } from '@/game/bars';
 import { typingInField } from '@/app';
+import { attachPadNav, focusList } from './padNav';
 import { CAM_ASPECT, VideoRecorder, openCamera, videoRecordingSupported, type HudSnapshot, type RecordedVideo } from '@/game/videoRecorder';
 import { hitWindowsFor, starString, verdictFor } from '@/game/scoring';
 import { h, button, toast, fmtScore } from './dom';
@@ -417,12 +418,20 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     refreshPractice();
   }
 
+  // Pads drive the pause menu only; while playing they are the instrument.
+  const pauseFocus = focusList(
+    () => (pauseOverlay ? Array.from(pauseOverlay.querySelectorAll<HTMLElement>('.menu > .btn')) : []),
+    () => pauseOverlay?.querySelector<HTMLElement>('.menu > .btn.primary'),
+  );
+  const pads = attachPadNav(app, () => (pauseOverlay ? { ...pauseFocus, back: togglePause, backLabel: 'RESUME' } : null));
+
   function togglePause(): void {
     if (!session) return;
     if (pauseOverlay) {
       pauseOverlay.remove();
       pauseOverlay = null;
       session.resume();
+      pads.refresh();
       return;
     }
     session.pause();
@@ -458,6 +467,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
       ),
     );
     el.appendChild(pauseOverlay);
+    pads.refresh();
   }
 
   function restart(): void {
@@ -547,6 +557,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     dispose: () => {
       window.removeEventListener('keydown', onKey);
       document.removeEventListener('visibilitychange', onVis);
+      pads.dispose();
       session?.stop();
       recorder?.discard();
       recorder = null;
