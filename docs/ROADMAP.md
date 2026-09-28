@@ -44,6 +44,11 @@ Songs-first. Every phase ends with something playable on the TD-07.
 - [ ] Capture: `USBDrv = VENDOR` + Roland driver 1.0.2 → GarageBand audio + MIDI tracks; slate with a clap and a rimshot. Backing track stays out of the USB stream (clean stem).
 - [ ] Edit in DaVinci Resolve (free): waveform auto-sync, 3-up grid. Upload unlisted first; expect a T-Series Content ID claim set to Monetize.
 
+## Performance (done 2026-09-28)
+
+- [x] Lag on expert charts traced to Canvas 2D `shadowBlur`: every hit ripple, hit ghost, note glyph, receptor flash and the sunburst outline rasterised a blurred layer per frame on a 3008×1606 canvas. Measured on the M4 with the tab visible, expert chart, 25 s: old build mean 17.6 ms / p95 50 ms / 21 % of frames over 33 ms → after caching static layers and replacing every live blur with pre-rendered halo sprites: mean 8.33 ms / p99 9.3 ms / 0 frames over 12 ms (locked 120 Hz). JS draw time was never the problem (0.5 ms).
+- [ ] Optional: the three sunburst gradient fills and the 140-star field are the largest remaining per-frame fills (measured ~1 ms); fine at 120 Hz, revisit only on weaker machines.
+
 ## Housekeeping
 
 - [x] DRUMKILLER landing page and its Pages deploy removed; `.github/workflows/ci.yml` runs typecheck + tests + build. Hosting the app (GitHub Pages or elsewhere) is a later decision.
