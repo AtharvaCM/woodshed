@@ -5,7 +5,7 @@ import { openCamera, videoRecordingSupported } from '@/game/videoRecorder';
 import { topbar } from './topbar';
 import { VOICE_COLORS } from '@/game/renderer';
 import { hitWindowsFor } from '@/game/scoring';
-import { DIFFICULTIES, LANE_LABELS, type Lane } from '@/types';
+import { DIFFICULTIES, LANE_LABELS, type Lane, type RenderScale } from '@/types';
 import { LANE_COLORS } from '@/game/renderer';
 import { Metronome, Transport } from '@/audio';
 
@@ -239,6 +239,20 @@ export function settingsScreen(app: App): Screen {
           h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: s.drumSoundsOnHit, onChange: (e: Event) => app.settingsStore.update({ drumSoundsOnHit: (e.target as HTMLInputElement).checked }) }), 'Play drum samples when I hit a pad (turn off if your FGDP makes its own sound)'),
           h('div', { style: { height: '8px' } }),
           h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: s.reducedMotion, onChange: (e: Event) => app.settingsStore.update({ reducedMotion: (e.target as HTMLInputElement).checked }) }), 'Reduced motion (no shake / particles)'),
+          h('div', { style: { height: '8px' } }),
+          field(
+            'Highway resolution',
+            select(
+              [
+                { value: '2', label: '2× (full Retina)' },
+                { value: '1.5', label: '1.5× (about half the pixels)' },
+                { value: '1', label: '1× (lightest)' },
+              ],
+              String(s.renderScale),
+              (v) => app.settingsStore.update({ renderScale: Number(v) as RenderScale }),
+            ),
+            'Lower this if the highway stutters on a Retina display. Takes effect on the next song.',
+          ),
         ),
         h(
           'div',

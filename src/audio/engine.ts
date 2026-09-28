@@ -168,7 +168,11 @@ export class AudioEngine {
    */
   heardAudioTime(): number {
     const p = this.clockPair();
-    return this.outputTimestampUsed ? p.audio : this.ctx.currentTime - this.outputLatency;
+    // getOutputTimestamp() is a snapshot taken at the last audio callback, so on its own it advances in
+    // callback-sized steps (5–11 ms). Adding the wall-clock time elapsed since that snapshot makes it
+    // continuous, which is what a 120 Hz highway needs.
+    if (this.outputTimestampUsed) return p.audio + Math.max(0, performance.now() - p.perf) / 1000;
+    return this.ctx.currentTime - this.outputLatency;
   }
 
   /**

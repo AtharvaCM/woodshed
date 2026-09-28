@@ -283,7 +283,12 @@ export interface Settings {
   recordRotate: boolean;
   /** Output height in pixels (16:9). */
   recordResolution: RecordResolution;
+  /** Cap on highway canvas device pixels per CSS pixel: 2 = full Retina, 1.5 = ~half the pixels, 1 = lightest. */
+  renderScale: RenderScale;
 }
+
+export type RenderScale = 1 | 1.5 | 2;
+export const RENDER_SCALES: RenderScale[] = [2, 1.5, 1];
 
 export type RecordResolution = 720 | 1080;
 export const RECORD_RESOLUTIONS: RecordResolution[] = [720, 1080];
@@ -317,4 +322,5 @@ export const DEFAULT_SETTINGS: Settings = {
   recordMic: false,
   recordRotate: false,
   recordResolution: 720,
+  renderScale: 2,
 };

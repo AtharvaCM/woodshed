@@ -69,6 +69,8 @@ body {
   pointer-events: none; opacity: .35;
 }
 .reduced-motion .backdrop::before { animation: none; }
+/* The game screen covers the backdrop with an opaque canvas; stop animating what nobody can see. */
+body:has(.screen.game) .backdrop::before { animation: none; }
 
 /* ───────────── screens ───────────── */
 .screen {
@@ -230,7 +232,7 @@ body.dragover::after { content: 'DROP SONG ZIP TO IMPORT'; position: fixed; inse
 .hud .song-info .t { font-family: var(--font-display); font-size: 16px; }
 .hud .song-info .a { font-size: 12px; color: var(--ink-dim); }
 .hud .progress { position: absolute; top: 0; left: 0; right: 0; height: 4px; background: rgba(255,255,255,.08); }
-.hud .progress > div { height: 100%; background: linear-gradient(90deg, var(--accent-2), var(--accent)); width: 0; box-shadow: 0 0 12px var(--accent); }
+.hud .progress > div { height: 100%; background: linear-gradient(90deg, var(--accent-2), var(--accent)); width: 100%; transform: scaleX(0); transform-origin: 0 50%; box-shadow: 0 0 12px var(--accent); }
 .hud .acc-box { position: absolute; bottom: 18px; right: 28px; text-align: right; }
 .hud .acc { font-family: var(--font-mono); font-size: 18px; }
 .hud .stars-live { font-size: 16px; letter-spacing: 3px; color: var(--accent-2); text-shadow: 0 0 12px var(--accent-2); }

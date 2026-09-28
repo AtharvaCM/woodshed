@@ -82,6 +82,22 @@ interface Ripple {
 /** How long a hit ghost lingers (ms). Several stack up to show whether you're running early or late. */
 export const HIT_GHOST_LIFE_MS = 2600;
 const RIPPLE_LIFE_MS = 1400;
+/** At 10 hits/s the 2.6 s ghost life never holds more than ~26 ghosts; the cap just bounds a burst. */
+const MAX_GHOSTS = 24;
+
+/**
+ * Everything that does not move: painted once into offscreen canvases (at device resolution) and blitted
+ * each frame. Rebuilt when the size, accent colour or lane order changes. This removes the road's
+ * gradients, the strike line's and receptors' blur layers, and the vignette from the per-frame cost.
+ */
+interface StaticLayers {
+  key: string;
+  /** Accent glow behind everything (the "breathing" is done by drawing it a second time). */
+  bg: HTMLCanvasElement;
+  /** Road body, lane stripes, dividers, edge glow, strike line, idle receptors. */
+  road: HTMLCanvasElement;
+  vignette: HTMLCanvasElement;
+}
 
 /**
  * Canvas 2D pseudo-3D highway renderer. Independent of game logic; the session feeds it a RenderState each frame.
@@ -111,6 +127,11 @@ export class HighwayRenderer {
   private lastFrame = performance.now();
   private reduced = false;
   private lastNoteWindowStart = 0;
+  /** Cap on device pixels per CSS pixel (2 = full Retina). Every fill and blur scales with its square. */
+  private renderScale = 2;
+  private layers: StaticLayers | null = null;
+  /** Last font string assigned this frame, so tom labels do not re-parse a font per note. */
+  private lastFont = '';
 
   // Layout (computed in resize)
   private cx = 0;
@@ -135,10 +156,20 @@ export class HighwayRenderer {
   /** Left-to-right order of the vertical lanes. */
   setLaneOrder(order: Lane[]): void {
     this.laneOrder = [...order];
+    this.layers = null;
+  }
+
+  /** Cap on device pixels per CSS pixel: 2 = full Retina, 1.5 = 44% fewer pixels to fill and blur, 1 = lightest. */
+  setRenderScale(scale: number): void {
+    const s = Math.max(1, Math.min(2, scale));
+    if (s === this.renderScale) return;
+    this.renderScale = s;
+    this.resize();
   }
 
   resize(): void {
-    this.dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.dpr = Math.min(this.renderScale, window.devicePixelRatio || 1);
+    this.layers = null;
     const rect = this.canvas.getBoundingClientRect();
     this.w = Math.max(1, Math.floor(rect.width));
     this.h = Math.max(1, Math.floor(rect.height));
@@ -188,7 +219,7 @@ export class HighwayRenderer {
    */
   hitGhost(voice: DrumVoice, delta: number, velocity: number, judgement: Judgement): void {
     this.ghosts.push({ voice, delta, velocity, judgement, t0: performance.now() });
-    if (this.ghosts.length > 64) this.ghosts.splice(0, this.ghosts.length - 64);
+    if (this.ghosts.length > MAX_GHOSTS) this.ghosts.splice(0, this.ghosts.length - MAX_GHOSTS);
   }
 
   /** Background ripple for a drum hit (any mode). */
@@ -249,20 +280,23 @@ export class HighwayRenderer {
     const ctx = this.ctx;
     const { w, h } = this;
 
+    const accent = state.accent ?? '#ff2d75';
+    const layers = this.staticLayers(accent);
+    this.lastFont = '';
+
     ctx.save();
-    // background
+    // background: solid, then the cached accent glow; it breathes with the low end of the mix by being
+    // drawn a second time at a bass-driven alpha (the old per-frame gradient rebuilt three colour stops).
     ctx.fillStyle = '#07070b';
     ctx.fillRect(0, 0, w, h);
-    const accent = state.accent ?? '#ff2d75';
     this.sampleAudio(dt, !!state.paused);
-    // The horizon glow breathes with the low end of the mix.
+    ctx.drawImage(layers.bg, 0, 0, w, h);
     const breathe = this.reduced ? 0 : this.bassLevel * 0.1;
-    const bgGrad = ctx.createRadialGradient(this.cx, this.farY, 10, this.cx, this.strikeY, h);
-    bgGrad.addColorStop(0, hexA(accent, 0.28 + breathe));
-    bgGrad.addColorStop(0.5, hexA(accent, 0.06 + breathe * 0.3));
-    bgGrad.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, w, h);
+    if (breathe > 0.005) {
+      ctx.globalAlpha = Math.min(1, breathe / 0.28);
+      ctx.drawImage(layers.bg, 0, 0, w, h);
+      ctx.globalAlpha = 1;
+    }
     this.drawVisualiser(accent, now, dt);
 
     // shake
@@ -271,7 +305,7 @@ export class HighwayRenderer {
       this.shake *= Math.pow(0.001, dt);
     } else this.shake = 0;
 
-    this.drawRoad(state);
+    ctx.drawImage(layers.road, 0, 0, w, h);
     this.drawBeats(state);
     this.drawReceptors(state, now);
     this.drawGhosts(state, now);
@@ -285,16 +319,86 @@ export class HighwayRenderer {
       ctx.fillRect(0, 0, w, h);
       this.flashAlpha *= Math.pow(0.01, dt);
     }
-    // vignette
+    ctx.drawImage(layers.vignette, 0, 0, w, h);
+  }
+
+  // ── static layers ──
+  private staticLayers(accent: string): StaticLayers {
+    const key = `${this.w}x${this.h}@${this.dpr}|${accent}|${this.laneOrder.join(',')}`;
+    if (this.layers && this.layers.key === key) return this.layers;
+    const make = (paint: (c: CanvasRenderingContext2D) => void): HTMLCanvasElement => {
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.floor(this.w * this.dpr));
+      c.height = Math.max(1, Math.floor(this.h * this.dpr));
+      const cc = c.getContext('2d');
+      if (!cc) throw new Error('Canvas 2D not available');
+      cc.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      paint(cc);
+      return c;
+    };
+    this.layers = {
+      key,
+      bg: make((c) => this.paintBackground(c, accent)),
+      road: make((c) => {
+        this.paintRoad(c, accent);
+        this.paintStrikeLine(c);
+        this.paintIdleReceptors(c);
+      }),
+      vignette: make((c) => this.paintVignette(c)),
+    };
+    return this.layers;
+  }
+
+  private paintBackground(ctx: CanvasRenderingContext2D, accent: string): void {
+    const bgGrad = ctx.createRadialGradient(this.cx, this.farY, 10, this.cx, this.strikeY, this.h);
+    bgGrad.addColorStop(0, hexA(accent, 0.28));
+    bgGrad.addColorStop(0.5, hexA(accent, 0.06));
+    bgGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, this.w, this.h);
+  }
+
+  private paintVignette(ctx: CanvasRenderingContext2D): void {
+    const h = this.h;
     const vg = ctx.createRadialGradient(this.cx, h * 0.5, h * 0.35, this.cx, h * 0.5, h * 0.95);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
     vg.addColorStop(1, 'rgba(0,0,0,0.6)');
     ctx.fillStyle = vg;
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(0, 0, this.w, h);
   }
 
-  private drawRoad(state: RenderState): void {
-    const ctx = this.ctx;
+  private paintStrikeLine(ctx: CanvasRenderingContext2D): void {
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.shadowColor = '#fff';
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.moveTo(this.cx - this.nearW / 2, this.strikeY);
+    ctx.lineTo(this.cx + this.nearW / 2, this.strikeY);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  /** Receptors in their resting state; a flashing lane is redrawn on top each frame by {@link drawReceptors}. */
+  private paintIdleReceptors(ctx: CanvasRenderingContext2D): void {
+    const rad = (this.nearW / this.laneOrder.length) * 0.34;
+    for (const lane of this.laneOrder) {
+      const x = this.laneCenterNear(lane);
+      const color = LANE_COLORS[lane];
+      ctx.beginPath();
+      ctx.ellipse(x, this.strikeY, rad, rad * 0.42, 0, 0, Math.PI * 2);
+      ctx.fillStyle = hexA(color, 0.15);
+      ctx.strokeStyle = hexA(color, 0.6);
+      ctx.lineWidth = 2;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  private paintRoad(ctx: CanvasRenderingContext2D, accent: string): void {
     const zNear = -0.16;
     const zFar = 1.05;
     const left = (z: number) => this.xAt(this.cx - this.nearW / 2, z);
@@ -341,8 +445,8 @@ export class HighwayRenderer {
     }
     // edge glow
     ctx.lineWidth = 3;
-    ctx.strokeStyle = hexA(state.accent ?? '#ff2d75', 0.7);
-    ctx.shadowColor = state.accent ?? '#ff2d75';
+    ctx.strokeStyle = hexA(accent, 0.7);
+    ctx.shadowColor = accent;
     ctx.shadowBlur = 18;
     ctx.beginPath();
     ctx.moveTo(left(zNear), this.yAt(zNear));
@@ -373,49 +477,44 @@ export class HighwayRenderer {
     }
   }
 
+  /** Only what changes at the strike line: lanes that are flashing (the resting receptors live in the static layer). */
   private drawReceptors(state: RenderState, now: number): void {
     const ctx = this.ctx;
     const laneW = this.nearW / this.laneOrder.length;
-    // strike line
     const l = this.cx - this.nearW / 2;
     const r = this.cx + this.nearW / 2;
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-    ctx.shadowColor = '#fff';
-    ctx.shadowBlur = 16;
-    ctx.beginPath();
-    ctx.moveTo(l, this.strikeY);
-    ctx.lineTo(r, this.strikeY);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    // receptors
-    this.flashes = this.flashes.filter((f) => now - f.t0 < 260);
-    this.laneOrder.forEach((lane) => {
+    // drop expired flashes in place (no per-frame array allocation)
+    let keep = 0;
+    for (let i = 0; i < this.flashes.length; i++) if (now - this.flashes[i].t0 < 260) this.flashes[keep++] = this.flashes[i];
+    this.flashes.length = keep;
+    if (!keep) return;
+    for (const lane of this.laneOrder) {
+      let flash: Flash | undefined;
+      for (let i = this.flashes.length - 1; i >= 0; i--) if (this.flashes[i].lane === lane) { flash = this.flashes[i]; break; }
+      if (!flash) continue;
       const x = this.laneCenterNear(lane);
-      const flash = this.flashes.filter((f) => f.lane === lane).pop();
-      const flashAmt = flash ? 1 - (now - flash.t0) / 260 : 0;
+      const flashAmt = 1 - (now - flash.t0) / 260;
       const color = LANE_COLORS[lane];
       const rad = laneW * 0.34;
       ctx.beginPath();
       ctx.ellipse(x, this.strikeY, rad, rad * 0.42, 0, 0, Math.PI * 2);
       ctx.fillStyle = hexA(color, 0.15 + flashAmt * 0.6);
-      ctx.strokeStyle = hexA(flash ? flash.color : color, 0.6 + flashAmt * 0.4);
+      ctx.strokeStyle = hexA(flash.color, 0.6 + flashAmt * 0.4);
       ctx.lineWidth = 2 + flashAmt * 4;
-      ctx.shadowColor = flash ? flash.color : color;
+      ctx.shadowColor = flash.color;
       ctx.shadowBlur = 8 + flashAmt * 30;
       ctx.fill();
       ctx.stroke();
       ctx.shadowBlur = 0;
-      if (flashAmt > 0 && flash) {
-        ctx.beginPath();
-        ctx.ellipse(x, this.strikeY, rad * (1 + (1 - flashAmt) * 0.9), rad * 0.42 * (1 + (1 - flashAmt) * 0.9), 0, 0, Math.PI * 2);
-        ctx.strokeStyle = hexA(flash.color, flashAmt * 0.8);
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-    });
+      ctx.beginPath();
+      ctx.ellipse(x, this.strikeY, rad * (1 + (1 - flashAmt) * 0.9), rad * 0.42 * (1 + (1 - flashAmt) * 0.9), 0, 0, Math.PI * 2);
+      ctx.strokeStyle = hexA(flash.color, flashAmt * 0.8);
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
     // crash flash: whole strike line glows
-    const crashFlash = this.flashes.filter((f) => f.lane === 'crash').pop();
+    let crashFlash: Flash | undefined;
+    for (let i = this.flashes.length - 1; i >= 0; i--) if (this.flashes[i].lane === 'crash') { crashFlash = this.flashes[i]; break; }
     if (crashFlash) {
       const amt = 1 - (now - crashFlash.t0) / 260;
       ctx.strokeStyle = hexA(crashFlash.color, amt);
@@ -444,10 +543,10 @@ export class HighwayRenderer {
       else hi = mid;
     }
     // draw far → near so near notes overlap far ones
-    const visible: TrackedNote[] = [];
-    for (let i = lo; i < notes.length && notes[i].time <= t1; i++) visible.push(notes[i]);
-    for (let i = visible.length - 1; i >= 0; i--) {
-      const n = visible[i];
+    let end = lo;
+    while (end < notes.length && notes[end].time <= t1) end++;
+    for (let i = end - 1; i >= lo; i--) {
+      const n = notes[i];
       if (n.state === 'hit') continue;
       const z = (n.time - state.time) / state.window;
       const missed = n.state === 'missed';
@@ -455,16 +554,21 @@ export class HighwayRenderer {
     }
   }
 
-  private drawNote(voice: DrumVoice, z: number, velocity: number, alpha: number, missed: boolean, ghost = false): void {
+  /**
+   * One note glyph. `shadow=false` skips the blur layer (each shadowed draw rasterises a separate blurred
+   * copy of the glyph's bounding box); hit ghosts use it, since they fade at ≤ 0.42 alpha anyway.
+   */
+  private drawNote(voice: DrumVoice, z: number, velocity: number, alpha: number, missed: boolean, ghost = false, shadow = true): void {
     const ctx = this.ctx;
     const lane = LANE_FOR_VOICE[voice];
     const scale = this.widthScaleAt(z);
     const y = this.yAt(z);
     const laneW = (this.nearW / this.laneOrder.length) * scale;
     const color = missed ? '#6a6a7a' : VOICE_COLORS[voice];
+    const glow = shadow && !missed;
     ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
     ctx.shadowColor = color;
-    ctx.shadowBlur = missed ? 0 : (ghost ? 6 : 14) * scale;
+    ctx.shadowBlur = glow ? (ghost ? 6 : 14) * scale : 0;
     if (ghost) {
       // Recorded imprint: a hollow echo of the note receding into the distance.
       const lane0 = LANE_FOR_VOICE[voice];
@@ -487,10 +591,10 @@ export class HighwayRenderer {
       const r = this.xAt(this.cx + this.nearW / 2, z);
       const hh = Math.max(6, 16 * scale);
       const halo = hh * 1.6;
-      ctx.shadowBlur = missed ? 0 : 32 * scale;
+      ctx.shadowBlur = glow ? 32 * scale : 0;
       ctx.fillStyle = hexA(color, missed ? 0.15 : 0.35);
       ctx.fillRect(l, y - halo, r - l, halo * 2);
-      ctx.shadowBlur = missed ? 0 : 18 * scale;
+      ctx.shadowBlur = glow ? 18 * scale : 0;
       const g = ctx.createLinearGradient(l, 0, r, 0);
       g.addColorStop(0, hexA(color, 0.55));
       g.addColorStop(0.5, color);
@@ -609,8 +713,15 @@ export class HighwayRenderer {
         hexagon(ctx, x, y, rx * size, ry * size);
         ctx.fill();
         ctx.stroke();
+        ctx.shadowBlur = 0; // the label needs no glow, and text under a shadow is a second blur layer
         ctx.fillStyle = 'rgba(255,255,255,0.85)';
-        ctx.font = `700 ${Math.max(7, 11 * scale)}px "JetBrains Mono", monospace`;
+        // integer sizes so the font string repeats and the parse is skipped (a fresh fractional size per
+        // note per frame defeated the font cache)
+        const font = `700 ${Math.max(7, Math.round(11 * scale))}px "JetBrains Mono", monospace`;
+        if (font !== this.lastFont) {
+          ctx.font = font;
+          this.lastFont = font;
+        }
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(voice === 'tomHigh' ? 'H' : voice === 'tomMid' ? 'M' : 'L', x, y + 0.5);
@@ -752,12 +863,14 @@ export class HighwayRenderer {
       g.addColorStop(1, hexA(color, 0));
       ctx.fillStyle = g;
       ctx.fill();
-      ctx.strokeStyle = hexA(color, alpha * 1.6);
-      ctx.lineWidth = 1.2;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 18;
+      // Outline glow without a blur layer (a shadowed stroke here rasterised a near-full-canvas blurred copy
+      // three times per frame): a wide faint stroke under a thin bright one reads the same at this alpha.
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = hexA(color, alpha * 0.5);
       ctx.stroke();
-      ctx.shadowBlur = 0;
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = hexA(color, alpha * 1.6);
+      ctx.stroke();
     };
     ctx.globalCompositeOperation = 'lighter';
     burst(spin * 0.35, accent2, 0.85, 0.11, 0.86);
@@ -795,12 +908,13 @@ export class HighwayRenderer {
         else ctx.lineTo(x, y);
       }
       ctx.closePath();
-      ctx.strokeStyle = `rgba(255,255,255,${0.16 + energy * 0.3})`;
-      ctx.lineWidth = 1.4;
-      ctx.shadowColor = '#ffffff';
-      ctx.shadowBlur = 10;
+      const ringA = 0.16 + energy * 0.3;
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = `rgba(255,255,255,${ringA * 0.35})`;
       ctx.stroke();
-      ctx.shadowBlur = 0;
+      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = `rgba(255,255,255,${ringA})`;
+      ctx.stroke();
     }
 
     // ── core: a soft bass-lit orb ──
@@ -815,35 +929,48 @@ export class HighwayRenderer {
     ctx.fill();
 
     // ── ripples: one ring per drum hit, in the drum's colour, spreading from the centre ──
-    this.ripples = this.ripples.filter((r) => now - r.t0 < RIPPLE_LIFE_MS);
-    ctx.lineWidth = 2;
+    // This used to be the single most expensive thing on screen: each ring was a shadowed stroke whose
+    // bounding box exceeded the canvas for most of its life, so every hit added a full-canvas blur layer
+    // (up to 10 at once in busy passages). Now: skip rings that are invisible or already enclose the
+    // whole canvas, and fake the glow with a wide faint stroke under the thin one.
+    let keep = 0;
+    for (let i = 0; i < this.ripples.length; i++) if (now - this.ripples[i].t0 < RIPPLE_LIFE_MS) this.ripples[keep++] = this.ripples[i];
+    this.ripples.length = keep;
+    const enclose = Math.hypot(cx, cy / 0.8) + 8; // beyond this radius the ellipse contains every corner
     for (const r of this.ripples) {
       const p = (now - r.t0) / RIPPLE_LIFE_MS;
       const ease = 1 - Math.pow(1 - p, 2.4);
       const rr = inner + ease * R * 1.5;
+      if (rr > enclose) continue;
       const alpha = (1 - p) * (1 - p) * 0.18 * r.strength;
-      ctx.strokeStyle = hexA(r.color, alpha);
-      ctx.shadowColor = r.color;
-      ctx.shadowBlur = 12 * (1 - p);
+      if (alpha * 0.5 < 0.02) continue;
       ctx.beginPath();
       ctx.ellipse(cx, cy, rr, rr * 0.8, 0, 0, Math.PI * 2);
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = hexA(r.color, alpha * 0.35);
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = hexA(r.color, alpha);
       ctx.stroke();
     }
-    ctx.shadowBlur = 0;
     ctx.restore();
   }
 
   // ── hit ghosts ──
   private drawGhosts(state: RenderState, now: number): void {
-    this.ghosts = this.ghosts.filter((g) => now - g.t0 < HIT_GHOST_LIFE_MS);
+    let keep = 0;
+    for (let i = 0; i < this.ghosts.length; i++) if (now - this.ghosts[i].t0 < HIT_GHOST_LIFE_MS) this.ghosts[keep++] = this.ghosts[i];
+    this.ghosts.length = keep;
     const ctx = this.ctx;
     for (const g of this.ghosts) {
       const p = (now - g.t0) / HIT_GHOST_LIFE_MS;
       const alpha = 0.42 * (1 - p) * (1 - p);
-      if (alpha < 0.01) continue;
+      if (alpha < 0.04) continue;
       // early → the note was still above the strike line; late → it had passed it
       const z = -g.delta / state.window;
-      this.drawNote(g.voice, z, g.velocity, alpha, false);
+      // Same glyph as a live note, minus the blur layer: at ≤ 0.42 alpha the glow is invisible anyway,
+      // and ghosts sit at the strike line where the glyphs are largest (the blur cost scales with area).
+      this.drawNote(g.voice, z, g.velocity, alpha, false, false, false);
       // a thin tick in the judgement colour at the exact hit position, so the offset is legible even when
       // the note shape is small
       const lane = LANE_FOR_VOICE[g.voice];
@@ -882,6 +1009,7 @@ export class HighwayRenderer {
 
   private drawLaneLabels(): void {
     const ctx = this.ctx;
+    this.lastFont = '';
     ctx.font = '700 11px "Space Grotesk", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';

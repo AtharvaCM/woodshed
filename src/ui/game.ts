@@ -113,13 +113,27 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
   let loopB: number | null = null;
 
   const JUDGE_COLORS: Record<string, string> = { perfect: '#ffe600', great: '#8dff5a', good: '#3ef2ff', miss: '#ff3b3b' };
+  // HUD pops run through the Web Animations API instead of the remove-class / read offsetWidth / add-class
+  // trick: that forced a synchronous layout on every judgement, inside the rAF loop and the MIDI handler.
+  const JUDGE_POP: Keyframe[] = [
+    { opacity: 0, transform: 'translate(-50%, -30%) scale(.6)', offset: 0 },
+    { opacity: 1, transform: 'translate(-50%, -50%) scale(1.15)', offset: 0.15 },
+    { opacity: 0, transform: 'translate(-50%, -80%) scale(1)', offset: 1 },
+  ];
+  const STREAK_POP: Keyframe[] = [
+    { opacity: 0, transform: 'translateX(-50%) scale(.5)', offset: 0 },
+    { opacity: 1, transform: 'translateX(-50%) scale(1.1)', offset: 0.12 },
+    { opacity: 1, offset: 0.7 },
+    { opacity: 0, transform: 'translateX(-50%) translateY(-30px)', offset: 1 },
+  ];
+  const COMBO_POP: Keyframe[] = [{ transform: 'scale(1.15)' }, { transform: 'scale(1)' }];
   const showJudge = (text: string, cls: string) => {
     judgeEl.textContent = text;
     judgeEl.className = `judge ${cls}`;
-    void judgeEl.offsetWidth;
-    judgeEl.classList.add('show');
+    judgeEl.animate(JUDGE_POP, { duration: 450, easing: 'ease-out' });
     lastJudge = { text, color: JUDGE_COLORS[cls] ?? '#fff', at: performance.now() };
   };
+  let progressFrac = 0;
 
   /** What the video recorder repaints over the highway (the DOM HUD is not captured). */
   const hudSnapshot = (): HudSnapshot => ({
@@ -129,7 +143,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     combo: comboEl.textContent ?? '0',
     accuracy: accEl.textContent ?? '',
     stars: starsEl.textContent ?? '',
-    progress: parseFloat(progressEl.style.width || '0') / 100,
+    progress: progressFrac,
     title: pkg.meta.title,
     artist: pkg.meta.artist,
     difficulty,
@@ -209,15 +223,14 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
         drumSoundsOnHit: settings.drumSoundsOnHit,
         reducedMotion: settings.reducedMotion,
         laneOrder: settings.laneOrder,
+        renderScale: settings.renderScale,
         loop: null,
       },
       {
         onJudge: (ev) => {
           scoreEl.textContent = fmtScore(ev.score);
           comboEl.textContent = String(ev.combo);
-          comboEl.classList.remove('pop');
-          void comboEl.offsetWidth;
-          comboEl.classList.add('pop');
+          comboEl.animate(COMBO_POP, { duration: 160, easing: 'ease-out' });
           multEl.textContent = `${ev.multiplier}×`;
           multEl.classList.toggle('max', ev.multiplier >= 4);
           if (ev.kind === 'hit') showJudge(ev.judgement.toUpperCase() + (Math.abs(ev.delta) > 0.02 ? (ev.delta < 0 ? ' ‹' : ' ›') : ''), ev.judgement);
@@ -233,12 +246,16 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
         onStreak: (combo) => {
           streakEl.textContent = combo >= 100 ? `${combo} KILLSTREAK` : `${combo} COMBO`;
           lastStreak = { text: streakEl.textContent, at: performance.now() };
-          streakEl.classList.remove('show');
-          void streakEl.offsetWidth;
-          streakEl.classList.add('show');
+          streakEl.animate(STREAK_POP, { duration: 1400, easing: 'ease-out' });
         },
         onTick: (pos, dur) => {
-          progressEl.style.width = `${Math.max(0, Math.min(100, (pos / dur) * 100))}%`;
+          // A transform instead of a width so the bar never triggers layout, and only when it visibly moved
+          // (a fresh float every frame forced the full style/layout/paint pipeline on the HUD each rAF).
+          const f = Math.max(0, Math.min(1, pos / dur));
+          if (Math.abs(f - progressFrac) >= 0.0005) {
+            progressFrac = f;
+            progressEl.style.transform = `scaleX(${f.toFixed(4)})`;
+          }
         },
         onCountdown: (n) => {
           countdown = n;

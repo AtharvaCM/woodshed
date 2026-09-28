@@ -23,6 +23,8 @@ export interface SessionConfig {
   drumSoundsOnHit: boolean;
   reducedMotion: boolean;
   laneOrder: Lane[];
+  /** Cap on canvas device pixels per CSS pixel (see Settings.renderScale). */
+  renderScale: number;
   /** Loop region for practice (chart seconds). */
   loop?: { start: number; end: number } | null;
 }
@@ -77,6 +79,7 @@ export class GameSession {
     this.renderer = new HighwayRenderer(canvas);
     this.renderer.setReducedMotion(cfg.reducedMotion);
     this.renderer.setLaneOrder(cfg.laneOrder);
+    this.renderer.setRenderScale(cfg.renderScale);
     // Background visualiser: tap the master bus (song + drums) with an analyser. Never fatal if unavailable.
     try {
       const an = engine.ctx.createAnalyser();

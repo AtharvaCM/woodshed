@@ -1,6 +1,6 @@
 /** User settings persisted through a KV, always merged over DEFAULT_SETTINGS. */
-import type { DrumVoice, Settings } from '@/types';
-import { DEFAULT_KEYBOARD, DEFAULT_SETTINGS, DRUM_VOICES, LANE_ORDER, RECORD_RESOLUTIONS, type Lane, type RecordResolution } from '@/types';
+import type { DrumVoice, RenderScale, Settings } from '@/types';
+import { DEFAULT_KEYBOARD, DEFAULT_SETTINGS, DRUM_VOICES, LANE_ORDER, RECORD_RESOLUTIONS, RENDER_SCALES, type Lane, type RecordResolution } from '@/types';
 import { readJson, writeJson, type KV } from './kv';
 
 export const SETTINGS_KEY = 'dk.settings.v1';
@@ -59,6 +59,7 @@ export function mergeSettings(raw: unknown): Settings {
     recordMic: typeof r.recordMic === 'boolean' ? r.recordMic : d.recordMic,
     recordRotate: typeof r.recordRotate === 'boolean' ? r.recordRotate : d.recordRotate,
     recordResolution: RECORD_RESOLUTIONS.includes(r.recordResolution as RecordResolution) ? (r.recordResolution as RecordResolution) : d.recordResolution,
+    renderScale: RENDER_SCALES.includes(r.renderScale as RenderScale) ? (r.renderScale as RenderScale) : d.renderScale,
   };
   if (typeof r.lastDeviceKey === 'string' && r.lastDeviceKey) settings.lastDeviceKey = r.lastDeviceKey;
   if (typeof r.recordCameraId === 'string' && r.recordCameraId) settings.recordCameraId = r.recordCameraId;
