@@ -4,6 +4,8 @@ A browser practice room for e-drummers. Plug a Roland TD-07 (or any USB-MIDI kit
 
 *Woodshed* is jazz slang for practising hard, alone, until it sits.
 
+**Play it:** <https://atharvacm.github.io/woodshed/> (Chrome or Edge). GitHub Pages redeploys it from `main` on every push.
+
 **Status:** day 0. Forked from [DRUMKILLER](https://github.com/sam1am/drumkiller) by sam1am (MIT), rebranded, with a Roland V-Drums preset added. Everything DRUMKILLER does still works; see [docs/ROADMAP.md](docs/ROADMAP.md) for what comes next and [docs/research.md](docs/research.md) for the verified facts behind the plan.
 
 ```
