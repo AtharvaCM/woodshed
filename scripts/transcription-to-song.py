@@ -9,6 +9,12 @@ quiet hand hats (drum2midi put 190 in Labon Ko, most filling gaps in the 16th ha
 the same drum at the same instant after folding and snapping are merged (the louder one stays). --sections takes a JSON file of
 [{ "bar": 1, "name": "Intro" }, …] (bar 1 = chart tick 0) and writes it into song.json.
 
+Toms that land on a kick are dropped unless --keep-kick-toms: transcribers read a kick's resonance as a tom
+(drum2midi put 170 of Labon Ko's 189 toms on the kick's own 16ths; the drum stem there is a kick, sub-bass
+60 % against 13 % under the real fills). With --drums-stem the stem decides each one: a tom whose share of
+90–250 Hz against 40–90 Hz is at least TOM_SHARE stays (no lone kick in Labon Ko reached 0.57; real fill toms
+sit around 0.85). Without it, a tom on a kick stays only inside a run of toms (another tom within two 16ths).
+
   .venv/bin/python scripts/transcription-to-song.py \
       --midi audio/labon-ko-adtof.mid --bpm 108 --offset 0.511 \
       --audio audio/labon-ko-no-drums.m4a --audio-with-drums "audio/02 Labon Ko.m4a" \
@@ -40,6 +46,8 @@ ap.add_argument('--max-snap', type=float, default=0.06, help='seconds; notes fur
 ap.add_argument('--fold-open-hats', action='store_true', help='write open hi-hat (46) as closed (42); transcribers often call every accented 16th "open"')
 ap.add_argument('--keep-pedal-hats', action='store_true', help='keep pedal hi-hat (44) as a foot part instead of writing it as closed hat (42); only for a transcription you trust to tell the foot from quiet hand hats')
 ap.add_argument('--sections', metavar='JSON', help='file with [{"bar": N, "name": "..."}]: named sections for song.json (bar 1 = chart tick 0)')
+ap.add_argument('--keep-kick-toms', action='store_true', help='keep toms that land on a kick (by default they are dropped as the kick read twice)')
+ap.add_argument('--drums-stem', metavar='WAV', help='drum stem aligned with --audio; lets the audio decide which toms on a kick are real')
 ap.add_argument('--out', required=True)
 a = ap.parse_args()
 
@@ -76,6 +84,44 @@ for n in notes:
         continue
     written[key] = pretty_midi.Note(velocity=vel, pitch=pitch, start=t, end=t + beat / 8)
     drums.notes.append(written[key])
+TOMS, KICKS = {41, 43, 45, 47, 48, 50}, {35, 36}
+TOM_SHARE = 0.6
+
+
+def tom_share(y, sr, t):
+    """Share of 90–250 Hz (tom body) against 40–90 Hz (kick) in the drum stem, 10 ms before to 90 ms after t."""
+    import numpy as np
+    a, z = max(0, int((t - 0.01) * sr)), int((t + 0.09) * sr)
+    seg = y[a:z]
+    if len(seg) < 64:
+        return 0.0
+    spec = np.abs(np.fft.rfft(seg * np.hanning(len(seg)))) ** 2
+    f = np.fft.rfftfreq(len(seg), 1 / sr)
+    tom, sub = spec[(f >= 90) & (f < 250)].sum(), spec[(f >= 40) & (f < 90)].sum()
+    return float(tom / (tom + sub + 1e-12))
+
+
+kick_toms = kept_toms = 0
+if not a.keep_kick_toms:
+    stem = None
+    if a.drums_stem:
+        import librosa
+        stem = librosa.load(a.drums_stem, sr=22050, mono=True)
+    kicks = [n.start for n in drums.notes if n.pitch in KICKS]
+    toms = [n for n in drums.notes if n.pitch in TOMS]
+    on_kick = lambda n: any(abs(k - n.start) <= 0.03 for k in kicks)
+    in_run = lambda n: any(o is not n and abs(o.start - n.start) <= beat / 2 + 0.01 for o in toms)
+    drop = set()
+    for n in toms:
+        if not on_kick(n):
+            continue
+        kick_toms += 1
+        real = tom_share(stem[0], stem[1], n.start + a.offset) >= TOM_SHARE if stem else in_run(n)
+        if real:
+            kept_toms += 1
+        else:
+            drop.add(id(n))
+    drums.notes = [n for n in drums.notes if id(n) not in drop]
 out.instruments.append(drums)
 out.time_signature_changes.append(pretty_midi.TimeSignature(4, 4, 0))
 
@@ -128,7 +174,9 @@ with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
     for f in sorted(os.listdir(a.out)):
         z.write(os.path.join(a.out, f), f)
 print(f"{len(drums.notes)} notes written ({dropped} before offset dropped); folder {a.out}; zip {zip_path}")
-print(f"folded into closed hat (42): {folded[46]} open (46), {folded[44]} pedal (44); same-drum duplicates merged: {len(notes) - dropped - len(drums.notes)}")
+print(f"folded into closed hat (42): {folded[46]} open (46), {folded[44]} pedal (44); same-drum duplicates merged: {len(notes) - dropped - len(written)}")
+if not a.keep_kick_toms:
+    print(f"toms on a kick: {kick_toms}, dropped {kick_toms - kept_toms}, kept {kept_toms} ({'tom-like in the drum stem' if a.drums_stem else 'inside a tom run'})")
 if a.quantize:
     import statistics
     print(f"quantized to 1/{a.quantize}: {snapped} snapped, mean shift {statistics.mean(snap_err)*1000:+.1f} ms, max |shift| {max(abs(x) for x in snap_err)*1000:.1f} ms, {len(notes)-dropped-snapped} left unsnapped (> {a.max_snap*1000:.0f} ms off grid)")
