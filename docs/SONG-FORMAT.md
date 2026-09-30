@@ -42,6 +42,7 @@ Every field, what it means, and its default when omitted:
 | `artwork` | path | no | — | Cover image: `png`, `jpg`, `webp`, `gif` or `svg`. Square works best. |
 | `preview` | `{ start, length }` | no | — | Seconds into the audio to play on the song-select screen. `start` ≥ 0, `length` > 0. |
 | `accent` | CSS color | no | — | Theme accent for this song, e.g. `"#ff5a1f"` or `"hsl(20 90% 55%)"`. |
+| `sections` | `[{ bar, name }]` | no | detected from the chart | Named parts of the song. See [Sections](#sections). |
 
 Paths are relative to the folder root, use forward slashes, and may not contain `..`. A leading `./` is fine.
 
@@ -73,7 +74,12 @@ Paths are relative to the folder root, use forward slashes, and may not contain 
   "sampleGain": 1,
   "artwork": "artwork.png",
   "preview": { "start": 42, "length": 20 },
-  "accent": "#ff5a1f"
+  "accent": "#ff5a1f",
+  "sections": [
+    { "bar": 1, "name": "Intro" },
+    { "bar": 9, "name": "Verse 1" },
+    { "bar": 25, "name": "Hook" }
+  ]
 }
 ```
 
@@ -145,6 +151,12 @@ By default the game plays its built-in kit when you hit a pad. To make a song so
 ```
 
 Voice keys are exactly: `kick`, `snare`, `tomHigh`, `tomMid`, `tomLow`, `hihatClosed`, `hihatOpen`, `hihatPedal`, `ride`, `crash`. Samples can be `wav`, `mp3`, `flac`, `aac`, `m4a` or `ogg`; short, trimmed, mono or stereo. Use `sampleGain` to balance the samples against the mix (`0.7` = quieter, `1.4` = louder).
+
+## Sections
+
+`sections` names the parts of the song: each entry starts at `bar` (1-based; bar 1 begins at chart tick 0, as the game counts bars) and runs until the next entry. `bar` is a whole number ≥ 1 and `name` a non-empty string; entries are sorted by bar on load, and a second entry for the same bar is dropped. Practice mode jumps between sections (`Shift+←` / `Shift+→`) and loops the one you are in, the bar counter shows the section name, and the grid view labels the bar where each section starts.
+
+A song without `sections` still gets them: the game folds the hardest chart into bars on a 16th grid, groups bars that play (nearly) the same pattern, and starts a section where the drums come in or stop, where the groove changes, and on the bar after a fill or on a crash on the one once a section has run 8 bars. Those are named after their groove (`A1`, `A2`, `B1`…, plus `Intro` / `Break` for tacet stretches). In the Studio, SONG → Sections → AUTO-DETECT FROM CHART copies them into the song so you can rename them (Verse, Hook…) and save.
 
 ## Artwork, preview and accent
 

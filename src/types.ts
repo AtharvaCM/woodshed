@@ -156,6 +156,14 @@ export interface SongMeta {
   accent?: string;
   /** Optional length in seconds (for display before audio decode). */
   length?: number;
+  /** Named sections (intro, verse, hook…), sorted by bar. Practice mode jumps and loops by section. */
+  sections?: SongSection[];
+}
+
+/** A named part of a song: from bar `bar` (1-based, bar 1 = chart tick 0) up to the next section. */
+export interface SongSection {
+  bar: number;
+  name: string;
 }
 
 /** An in-memory song folder: metadata + every file as a Blob keyed by relative path. */

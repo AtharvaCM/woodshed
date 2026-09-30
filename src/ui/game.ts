@@ -1,7 +1,7 @@
 import type { App, Screen } from '@/app';
-import type { Chart, Difficulty, ScoreSummary, SongPackage } from '@/types';
+import type { Chart, Difficulty, ScoreSummary, SongPackage, SongSection } from '@/types';
 import { DIFFICULTIES, DRUM_VOICES } from '@/types';
-import { chartFromMidi, deriveDifficulty, parseMidi, constantTempoMap, DEFAULT_PPQ } from '@/midi';
+import { chartFromMidi, deriveDifficulty, parseMidi, constantTempoMap, DEFAULT_PPQ, buildSongMap, proposeSections } from '@/midi';
 import { getChartBlob } from '@/song';
 import { GameSession, computeBeats, type GameMode } from '@/game/session';
 import { barAt, barSpan, barStarts, type BarNote } from '@/game/bars';
@@ -40,6 +40,20 @@ export async function loadChart(pkg: SongPackage, difficulty: Difficulty): Promi
   }
   const src = (await readChart(pkg, hardest))!;
   return { chart: deriveDifficulty(src, difficulty), derived: true };
+}
+
+/** Sections detected from the song's hardest chart (none without a chart). */
+export async function detectSections(pkg: SongPackage): Promise<SongSection[]> {
+  const real = await realDifficulties(pkg);
+  const hardest = real[real.length - 1];
+  const chart = hardest ? await readChart(pkg, hardest) : null;
+  return chart ? proposeSections(buildSongMap(chart)) : [];
+}
+
+/** The song's sections: the saved ones, else detected from its hardest chart (`auto`: name them in Studio). */
+export async function songSections(pkg: SongPackage): Promise<{ sections: SongSection[]; auto: boolean }> {
+  if (pkg.meta.sections?.length) return { sections: pkg.meta.sections, auto: false };
+  return { sections: await detectSections(pkg), auto: true };
 }
 
 /** Load a song's custom samples into the kit (or restore the default kit). */
@@ -122,6 +136,9 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
   /** Bar downbeats (chart seconds) and the last bar with music in it. */
   let starts: number[] = [];
   let lastBar = 0;
+  /** Named sections inside bars 1..lastBar; `sectionsAuto` when detected rather than saved with the song. */
+  let sections: SongSection[] = [];
+  let sectionsAuto = false;
   let shownBar = -1;
   let loopBars: { first: number; last: number } | null = null;
 
@@ -220,6 +237,8 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     if (mode === 'practice') modeTag.appendChild(h('span', { class: 'pill warn' }, 'PRACTICE · NO SCORE'));
     starts = barStarts(computeBeats(chart, audio.duration - pkg.meta.offset));
     lastBar = Math.max(1, barAt(Math.max(0, chart.duration - 0.001), starts));
+    ({ sections, auto: sectionsAuto } = await songSections(pkg).catch(() => ({ sections: [] as SongSection[], auto: false })));
+    sections = sections.filter((s) => s.bar <= lastBar);
     if (mode === 'practice' && loopParam && starts.length) loopBars = { first: loopParam.first, last: Math.min(loopParam.last, starts.length) };
 
     session = new GameSession(
@@ -242,6 +261,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
         reducedMotion: settings.reducedMotion,
         laneOrder: settings.laneOrder,
         view: settings.playView,
+        sections,
         renderScale: settings.renderScale,
         loop: loopBars ? barSpan(loopBars.first, loopBars.last, starts) : null,
       },
@@ -279,7 +299,9 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
           const bar = session ? barAt(session.chartTime, starts) : 0;
           if (bar !== shownBar) {
             shownBar = bar;
-            barEl.textContent = bar < 1 ? 'COUNT-IN' : bar > lastBar ? 'OUTRO' : `BAR ${bar} / ${lastBar}`;
+            const section = sections[sectionIndexAt(bar)];
+            barEl.textContent = bar < 1 ? 'COUNT-IN' : bar > lastBar ? 'OUTRO' : `BAR ${bar} / ${lastBar}${section ? ` · ${section.name}` : ''}`;
+            refreshSection();
           }
         },
         onCountdown: (n) => {
@@ -342,12 +364,26 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
   function renderKeyHint(): void {
     const k = (key: string) => h('kbd', null, key);
     keyHint.replaceChildren(
-      ...(mode === 'practice' ? [k('↑'), k('↓'), ' speed  ', k('←'), k('→'), ' bar  ', k('1'), k('2'), k('4'), k('8'), ' loop bars  ', k('0'), ' no loop  '] : []),
+      ...(mode === 'practice' ? [k('↑'), k('↓'), ' speed  ', k('←'), k('→'), ' bar  ', ...(sections.length ? [k('⇧←'), k('⇧→'), ' section  '] : []), k('1'), k('2'), k('4'), k('8'), ' loop bars  ', k('0'), ' no loop  '] : []),
       k('['), k(']'), ' offset  ', k('Esc'), ' pause',
     );
   }
 
   let refreshPractice = () => {};
+  let refreshSection = () => {};
+  /** Index of the section holding `bar`, or -1 before the first one. */
+  function sectionIndexAt(bar: number): number {
+    let i = -1;
+    while (i + 1 < sections.length && sections[i + 1].bar <= bar) i++;
+    return i;
+  }
+  /** Bars of section `i`: from its bar to the bar before the next section (or the last bar). */
+  function sectionSpan(i: number): { first: number; last: number } {
+    const first = sections[i].bar;
+    return { first, last: Math.max(first, Math.min(lastBar, (sections[i + 1]?.bar ?? lastBar + 1) - 1)) };
+  }
+  /** The loop covers exactly section `i`. */
+  const loopIsSection = (i: number) => i >= 0 && !!loopBars && loopBars.first === sectionSpan(i).first && loopBars.last === sectionSpan(i).last;
   function setRate(r: number): void {
     rate = Math.max(0.5, Math.min(1.25, Math.round(r * 20) / 20));
     localStorage.setItem('dk.practiceRate', String(rate));
@@ -365,10 +401,40 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     const b = Math.max(1, barAt(t, starts));
     let target = b + delta;
     if (delta < 0 && t - starts[b - 1] > runUp + 0.75) target = b;
-    target = Math.max(1, Math.min(lastBar, target));
-    const { start, end } = barSpan(target, target, starts);
+    seekToBar(Math.max(1, Math.min(lastBar, target)));
+  }
+  /** Jump to the start of a bar with a one-beat run-up. */
+  function seekToBar(bar: number): void {
+    if (!session) return;
+    const { start, end } = barSpan(bar, bar, starts);
     session.seek(start - (end - start) / 4);
-    jumpTarget = target;
+    jumpTarget = bar;
+  }
+  /**
+   * Jump by sections. Back from inside a section restarts it first, like ⏮. While a section is looping, the
+   * loop moves with the jump.
+   */
+  function stepSection(delta: number): void {
+    if (!session || !sections.length) return;
+    const cur = currentBar();
+    const i = sectionIndexAt(cur);
+    let target = i + delta;
+    if (delta < 0 && i >= 0 && cur > sections[i].bar) target = i;
+    target = Math.max(0, Math.min(sections.length - 1, target));
+    if (loopIsSection(i)) {
+      loopBars = sectionSpan(target);
+      session.setLoop(barSpan(loopBars.first, loopBars.last, starts));
+    }
+    seekToBar(sections[target].bar);
+    refreshPractice();
+  }
+  /** Loop the section you are in. */
+  function loopSection(): void {
+    if (!session || !sections.length) return;
+    const i = Math.max(0, sectionIndexAt(currentBar()));
+    loopBars = sectionSpan(i);
+    session.setLoop(barSpan(loopBars.first, loopBars.last, starts));
+    refreshPractice();
   }
   /** Bar the last ◀/▶ jumped to: during its run-up, "current bar" means that one. */
   let jumpTarget = 0;
@@ -410,11 +476,16 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     const clearLoop = button('✕', () => setLoop(null), 'icon small ghost');
     const guideBtn = button('', () => setGuide(!guideDrums), 'icon small');
     const viewBtn = button('', toggleView, 'icon small');
+    const sectionLabel = h('span', { class: 'section-label' });
+    const loopSectionBtn = button('LOOP', loopSection, 'icon small');
     const group = (label: string, ...items: HTMLElement[]) => h('div', { class: 'pgroup' }, h('span', { class: 'plabel' }, label), ...items);
     refreshPractice = () => {
       rateEl.textContent = `${Math.round(rate * 100)}%`;
       rateEl.title = `${Math.round(pkg.meta.bpm * rate)} BPM`;
-      loopLabel.textContent = loopBars ? (loopBars.first === loopBars.last ? `BAR ${loopBars.first}` : `BARS ${loopBars.first}–${loopBars.last}`) : 'OFF';
+      const looped = sections.findIndex((_, i) => loopIsSection(i));
+      loopLabel.textContent = loopBars ? `${looped >= 0 ? `${sections[looped].name} · ` : ''}${loopBars.first === loopBars.last ? `BAR ${loopBars.first}` : `BARS ${loopBars.first}–${loopBars.last}`}` : 'OFF';
+      loopSectionBtn.classList.toggle('active', looped >= 0);
+      refreshSection();
       loopLabel.classList.toggle('on', !!loopBars);
       clearLoop.hidden = !loopBars;
       loopBtns.forEach((b, i) => b.classList.toggle('active', !!loopBars && loopBars.last - loopBars.first + 1 === LOOP_LENGTHS[i]));
@@ -422,9 +493,18 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
       viewBtn.textContent = session?.view === 'highway' ? 'VIEW: HIGHWAY' : 'VIEW: GRID';
       guideBtn.classList.toggle('active', guideDrums);
     };
+    refreshSection = () => {
+      const i = session ? sectionIndexAt(currentBar()) : -1;
+      sectionLabel.textContent = i >= 0 ? sections[i].name : '—';
+    };
     practiceBar.replaceChildren(
       group('SPEED', button('−', () => setRate(rate - 0.05), 'icon small'), rateEl, button('+', () => setRate(rate + 0.05), 'icon small')),
       group('BAR', button('◀', () => stepBar(-1), 'icon small'), button('▶', () => stepBar(1), 'icon small')),
+      ...(sections.length
+        ? [h('div', { class: 'pgroup', title: sectionsAuto ? 'Sections detected from the chart. Name them in Studio → SONG.' : '' },
+            h('span', { class: 'plabel' }, sectionsAuto ? 'SECTION (AUTO)' : 'SECTION'),
+            button('◀', () => stepSection(-1), 'icon small'), sectionLabel, button('▶', () => stepSection(1), 'icon small'), loopSectionBtn)]
+        : []),
       group('LOOP', ...loopBtns, loopLabel, clearLoop),
       guideBtn,
       viewBtn,
@@ -545,8 +625,8 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
       const digit = /^Digit([0-9])$/.exec(e.code);
       if (e.code === 'ArrowUp') setRate(rate + 0.05);
       else if (e.code === 'ArrowDown') setRate(rate - 0.05);
-      else if (e.code === 'ArrowLeft') stepBar(-1);
-      else if (e.code === 'ArrowRight') stepBar(1);
+      else if (e.code === 'ArrowLeft') (e.shiftKey ? stepSection(-1) : stepBar(-1));
+      else if (e.code === 'ArrowRight') (e.shiftKey ? stepSection(1) : stepBar(1));
       else if (digit && !e.repeat && LOOP_LENGTHS.includes(Number(digit[1]))) setLoop(Number(digit[1]));
       else if (digit && !e.repeat && digit[1] === '0') setLoop(null);
       else return;

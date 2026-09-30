@@ -1,4 +1,4 @@
-import { LANE_FOR_VOICE, LANE_LABELS, LANE_ORDER, type DrumVoice, type Judgement, type Lane } from '@/types';
+import { LANE_FOR_VOICE, LANE_LABELS, LANE_ORDER, type DrumVoice, type Judgement, type Lane, type SongSection } from '@/types';
 import type { TrackedNote } from './scoring';
 
 export const LANE_COLORS: Record<Lane, string> = {
@@ -43,6 +43,8 @@ export interface RenderState {
   paused?: boolean;
   /** Song accent color for the road glow. */
   accent?: string;
+  /** Named sections (sorted by bar). */
+  sections?: readonly SongSection[];
 }
 
 /**

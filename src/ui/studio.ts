@@ -1,5 +1,5 @@
 import type { App, Screen } from '@/app';
-import { DIFFICULTIES, DRUM_VOICES, VOICE_LABELS, type Chart, type Difficulty, type SongListEntry, type SongPackage } from '@/types';
+import { DIFFICULTIES, DRUM_VOICES, VOICE_LABELS, type Chart, type Difficulty, type SongListEntry, type SongPackage, type SongSection } from '@/types';
 import { chartToMidi, writeMidi, constantTempoMap, DEFAULT_PPQ } from '@/midi';
 import { createSongPackage, exportSongZip, loadSongFromZip, slugify, fileExtension, SAMPLE_EXTENSIONS, AUDIO_EXTENSIONS, DRUMS_AUDIO_BASENAME, playableDifficulties } from '@/song';
 import { Transport, Metronome } from '@/audio';
@@ -7,7 +7,7 @@ import { h, button, field, toast, clear, downloadBlob, pickFile, fmtTime, modal,
 import { topbar } from './topbar';
 import { studioState, type StudioTab } from './studioState';
 import { VOICE_COLORS } from '@/game/renderer';
-import { applySongKit, realDifficulties } from './game';
+import { applySongKit, detectSections, realDifficulties } from './game';
 import { offsetPicker, type OffsetPicker } from './offsetPicker';
 import { chartEditor, type ChartEditor } from './chartEditor';
 
@@ -492,6 +492,9 @@ export function studioScreen(app: App, params?: Record<string, unknown>): Screen
           h('h3', { style: { marginTop: 0 } }, 'Charts'),
           h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '6px' } }, ...chartPills),
           h('div', { class: 'small mute', style: { marginTop: '6px' } }, 'AUTO = generated from the hardest chart when the song is played. Difficulties above the hardest chart are not offered to players. A chart with no notes counts as no chart. Record onto a difficulty or edit it on the CHART tab to make it real.'),
+          h('h3', null, 'Sections'),
+          h('div', { class: 'small dim', style: { marginBottom: '8px' } }, 'Named parts of the song (intro, verse, hook…). Practice mode jumps and loops by section, and the grid shows the names. Without any, practice detects them from the chart.'),
+          sectionsEditor(),
           h('h3', null, 'Custom drum samples'),
           h('div', { class: 'small dim' }, 'Optional. Assign a sample (wav/mp3/flac/aac) per drum for this song. Missing drums use the built-in kit.'),
           samplesEditor(),
@@ -520,6 +523,54 @@ export function studioScreen(app: App, params?: Record<string, unknown>): Screen
       ),
       h('div', { class: 'btn-row' }, ...buttons),
     );
+  }
+
+  /** Rows of { bar, name }, plus ADD and AUTO-DETECT. Edits go straight into the working copy's song.json. */
+  function sectionsEditor(): HTMLElement {
+    const wrap = h('div', { class: 'sections-editor' });
+    const meta = studioState.pkg!.meta;
+    const commit = (next: SongSection[]) => {
+      const byBar = new Map<number, string>();
+      for (const s of [...next].sort((a, b) => a.bar - b.bar)) if (!byBar.has(s.bar)) byBar.set(s.bar, s.name);
+      const clean = [...byBar].map(([bar, name]) => ({ bar, name }));
+      if (clean.length) meta.sections = clean;
+      else delete meta.sections;
+      markDirty();
+      rerender();
+    };
+    const rerender = () => {
+      clear(wrap);
+      const list = meta.sections ?? [];
+      list.forEach((s, i) => {
+        const barIn = h('input', { class: 'input', type: 'number', min: 1, step: 1, value: s.bar, style: { width: '84px' }, onChange: (e: Event) => {
+          const bar = Math.round(Number((e.target as HTMLInputElement).value));
+          if (bar >= 1) commit(list.map((x, j) => (j === i ? { ...x, bar } : x)));
+          else rerender();
+        } });
+        const nameIn = h('input', { class: 'input', value: s.name, maxLength: 40, onChange: (e: Event) => {
+          const name = (e.target as HTMLInputElement).value.trim();
+          if (name) commit(list.map((x, j) => (j === i ? { ...x, name } : x)));
+          else rerender(); // a section needs a name; delete it with ✕ instead
+        } });
+        wrap.appendChild(h('div', { class: 'row', style: { gap: '6px', marginBottom: '6px' } },
+          h('span', { class: 'small mute', style: { width: '28px' } }, 'BAR'), barIn, nameIn,
+          button('✕', () => commit(list.filter((_, j) => j !== i)), 'icon ghost small')));
+      });
+      if (!list.length) wrap.appendChild(h('div', { class: 'small mute', style: { marginBottom: '8px' } }, 'None saved.'));
+      wrap.appendChild(h('div', { class: 'btn-row' },
+        button('ADD', () => { const last = list[list.length - 1]; commit([...list, { bar: last ? last.bar + 8 : 1, name: `Section ${list.length + 1}` }]); }, 'small'),
+        button('AUTO-DETECT FROM CHART', async () => {
+          if (list.length && !confirm('Replace these sections with the ones detected from the chart?')) return;
+          editor?.flush(); // unsaved chart edits count
+          const found = await detectSections(studioState.pkg!);
+          if (!found.length) return toast('No chart to detect sections from yet', 'bad');
+          commit(found);
+          toast(`Found ${found.length} sections: rename them to match the song`, 'ok');
+        }, 'small'),
+      ));
+    };
+    rerender();
+    return wrap;
   }
 
   function samplesEditor(): HTMLElement {

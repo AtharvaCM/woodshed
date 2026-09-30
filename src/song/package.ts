@@ -4,7 +4,7 @@
  * bundled URLs into an in-memory {@link SongPackage}, and writes them back out as zips.
  */
 import JSZip from 'jszip';
-import type { Difficulty, DrumVoice, SongMeta, SongPackage } from '@/types';
+import type { Difficulty, DrumVoice, SongMeta, SongPackage, SongSection } from '@/types';
 import { DIFFICULTIES, DRUM_VOICES } from '@/types';
 
 // ─────────────────────────── Constants ───────────────────────────
@@ -231,6 +231,23 @@ export function parseSongMeta(json: unknown): SongMeta {
   const year = optNumber(obj, 'year');
   if (year !== undefined && !Number.isInteger(year)) fail('"year" must be an integer');
 
+  // sections: sorted by bar, one per bar (the first one listed wins)
+  let sections: SongSection[] | undefined;
+  if (obj.sections !== undefined && obj.sections !== null) {
+    if (!Array.isArray(obj.sections)) fail('"sections" must be an array of { bar, name }');
+    const byBar = new Map<number, string>();
+    obj.sections.forEach((s, i) => {
+      if (!isObject(s)) fail(`"sections[${i}]" must be an object { bar, name }`);
+      const bar = s.bar;
+      if (typeof bar !== 'number' || !Number.isInteger(bar) || bar < 1) fail(`"sections[${i}].bar" must be a whole number ≥ 1`);
+      const name = typeof s.name === 'string' ? s.name.trim() : '';
+      if (!name) fail(`"sections[${i}].name" must be a non-empty string`);
+      if (!byBar.has(bar)) byBar.set(bar, name);
+    });
+    sections = [...byBar].sort((a, b) => a[0] - b[0]).map(([bar, name]) => ({ bar, name }));
+    if (!sections.length) sections = undefined;
+  }
+
   const meta: SongMeta = {
     format: 1,
     id,
@@ -255,6 +272,7 @@ export function parseSongMeta(json: unknown): SongMeta {
   if (preview) meta.preview = preview;
   if (accent) meta.accent = accent;
   if (length !== undefined) meta.length = length;
+  if (sections) meta.sections = sections;
   return meta;
 }
 
@@ -280,6 +298,7 @@ export function serializeSongMeta(meta: SongMeta): string {
     artwork: meta.artwork,
     preview: meta.preview,
     accent: meta.accent,
+    sections: meta.sections?.length ? meta.sections : undefined,
   };
   for (const k of Object.keys(ordered)) if (ordered[k] === undefined) delete ordered[k];
   return JSON.stringify(ordered, null, 2) + '\n';

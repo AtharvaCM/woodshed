@@ -121,6 +121,20 @@ describe('parseSongMeta', () => {
     expect(() => parseSongMeta('{not json')).toThrow(/not valid JSON/);
   });
 
+  it('reads sections sorted by bar, one per bar, names trimmed', () => {
+    const base = { title: 't', bpm: 100, audio: 'x.mp3' };
+    const meta = parseSongMeta({ ...base, sections: [{ bar: 17, name: ' Hook ' }, { bar: 1, name: 'Intro' }, { bar: 17, name: 'Dup' }] });
+    expect(meta.sections).toEqual([{ bar: 1, name: 'Intro' }, { bar: 17, name: 'Hook' }]);
+    expect(parseSongMeta({ ...base, sections: [] }).sections).toBeUndefined();
+    expect(() => parseSongMeta({ ...base, sections: {} })).toThrow(/"sections" must be an array/);
+    expect(() => parseSongMeta({ ...base, sections: [{ bar: 0, name: 'x' }] })).toThrow(/sections\[0\]\.bar/);
+    expect(() => parseSongMeta({ ...base, sections: [{ bar: 2.5, name: 'x' }] })).toThrow(/sections\[0\]\.bar/);
+    expect(() => parseSongMeta({ ...base, sections: [{ bar: 1, name: '  ' }] })).toThrow(/sections\[0\]\.name/);
+    const json = serializeSongMeta(meta);
+    expect(JSON.parse(json).sections).toEqual(meta.sections);
+    expect(parseSongMeta(json)).toEqual(meta);
+  });
+
   it('round-trips through serializeSongMeta', () => {
     const meta = samplePkg().meta;
     const json = serializeSongMeta(meta);
