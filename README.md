@@ -32,7 +32,7 @@ Switch `USBDrv` to `VENDOR` and install Roland's driver only when you want the m
 
 ## What it does today
 
-- **Grid view** (default): the chart as drum-tab lines, two bars a line with the next line underneath and a playhead sweeping across. Every drum has a fixed row in notation order and every 16th a fixed column, so a groove looks the same each time round; notes are sized by velocity (ghosts hollow, accents ringed) and your strokes show as ticks where they landed.
+- **Grid view** (default): the chart as drum-tab lines, two bars a line (one on a narrow window) with the next line underneath and a playhead sweeping across. Every drum has a fixed row in notation order and every 16th a fixed column, so a groove looks the same each time round; notes are sized by velocity (ghosts hollow, accents ringed) and your strokes show as ticks where they landed.
 - **Highway**: hi-hat, snare, kick, toms, ride lanes and a full-width crash bar. Settings → View & controls, or the VIEW button in practice, switches between the two. Four difficulties per song; easier charts derive automatically from the hardest one.
 - **Scoring**: perfect/great/good windows (scaled by *Hit window size* in Settings), combo, stars, full-combo badge, local leaderboards.
 - **Practice mode**: 50–125 % speed (presets on the song screen), bar counter, loop 1/2/4/8 bars from the current bar, jump bar by bar, guide drums on/off mid-take. Keys: `↑`/`↓` speed, `←`/`→` bar, `1` `2` `4` `8` loop, `0` no loop. Nothing is saved.

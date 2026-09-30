@@ -3,9 +3,10 @@
  *
  * Composites, every frame, into an offscreen 16:9 canvas, side by side:
  *   1. the webcam in a full-height portrait column on the left (CAM_FRACTION of the width),
- *   2. the play canvas in the remaining area: the highway at full height and centred (the sides are
- *      trimmed — the road is at most 980 CSS px wide, so lanes survive any sane window); the grid view
- *      whole, letterboxed, because its lines run edge to edge,
+ *   2. the game in the remaining area: the grid view lays itself out afresh for that column (its own
+ *      size, text at the video's scale, clear of the HUD below); the highway canvas is copied at full
+ *      height and centred (the sides are trimmed — the road is at most 980 CSS px wide and centred,
+ *      so lanes survive any sane window),
  *   3. a repaint of the HUD (score, combo, judgements, song info…) — the real HUD is DOM, so it
  *      would be missing from a plain canvas capture.
  *
@@ -15,7 +16,7 @@
  */
 
 import type { HitWindows, Lane, ScoreSummary } from '@/types';
-import { JUDGE_COLORS } from './renderer';
+import { JUDGE_COLORS, type PaintFrame } from './renderer';
 import { starString } from './scoring';
 import { drawTimingHeatmap, type TimingHit } from './timingHeatmap';
 
@@ -45,8 +46,8 @@ export interface HudSnapshot {
 
 export interface VideoRecorderOptions {
   highway: HTMLCanvasElement;
-  /** 'cover' trims the canvas' sides to fill the game area (the highway); 'contain' shows all of it (the grid). */
-  fit?: () => 'cover' | 'contain';
+  /** Paint the game straight into the video's game column (at the context's origin); false = copy `highway`. */
+  paintGame?: (ctx: CanvasRenderingContext2D, frame: PaintFrame) => boolean;
   /** Webcam stream (video, optionally audio). May be null: the game is still recorded. */
   camera: MediaStream | null;
   /** Game audio (AudioEngine.captureNode.stream). */
@@ -225,12 +226,23 @@ export class VideoRecorder {
   private drawHighway(): void {
     const { ctx } = this;
     const src = this.opts.highway;
-    if (!src.width || !src.height) return;
     const r = this.gameRect();
-    // Cover: always full height, sides trimmed symmetrically so the road stays centred (on a window narrower
-    // than the game area's aspect the top/bottom are trimmed instead). Contain: all of it, letterboxed.
-    const contain = this.opts.fit?.() === 'contain';
-    const scale = contain ? Math.min(r.w / src.width, r.h / src.height) : Math.max(r.w / src.width, r.h / src.height);
+    if (this.opts.paintGame) {
+      // Margins clear of the HUD drawHud paints: combo / practice tag / score above, accuracy and stars below.
+      const u = this.height / 720;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(r.x, r.y, r.w, r.h);
+      ctx.clip();
+      ctx.translate(r.x, r.y);
+      const painted = this.opts.paintGame(ctx, { width: r.w, height: r.h, top: 104 * u, bottom: 64 * u, side: 24 * u, scale: u });
+      ctx.restore();
+      if (painted) return;
+    }
+    if (!src.width || !src.height) return;
+    // Always full height; trim the sides symmetrically so the road stays centred. (On a window
+    // narrower than the game area's aspect the top/bottom are trimmed instead.)
+    const scale = Math.max(r.w / src.width, r.h / src.height);
     const w = src.width * scale;
     const h = src.height * scale;
     ctx.save();

@@ -65,6 +65,21 @@ export interface PlayRenderer {
   streakBurst(): void;
   /** A judged stroke at chart time `time`: a hit (with its judgement) or an overhit. */
   stroke(voice: DrumVoice, time: number, judgement: Judgement | 'over'): void;
+  /**
+   * Paint the last frame laid out for another surface of `frame`'s size, at the context's current transform
+   * (the performance video's game column). False when the view cannot, and the canvas is copied instead.
+   */
+  paintTo?(ctx: CanvasRenderingContext2D, frame: PaintFrame): boolean;
+}
+
+/** A surface to paint a view into: its size, the margins a HUD keeps, and a size multiplier for text and marks. */
+export interface PaintFrame {
+  width: number;
+  height: number;
+  top: number;
+  bottom: number;
+  side: number;
+  scale: number;
 }
 
 interface Particle {

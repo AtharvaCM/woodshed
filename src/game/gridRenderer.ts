@@ -1,6 +1,6 @@
 import type { DrumVoice, Judgement } from '@/types';
 import { barAt, barStarts } from './bars';
-import { JUDGE_COLORS, VOICE_COLORS, type BeatMark, type PlayRenderer, type RenderState } from './renderer';
+import { JUDGE_COLORS, VOICE_COLORS, type BeatMark, type PaintFrame, type PlayRenderer, type RenderState } from './renderer';
 import type { TrackedNote } from './scoring';
 
 /**
@@ -36,13 +36,50 @@ export function gridRows(notes: readonly { voice: DrumVoice }[]): GridRow[] {
   return rows.length ? rows : GRID_ROWS.filter((r) => ['HH', 'SN', 'BD'].includes(r.label));
 }
 
-/** Bars per line. */
-export const BARS_PER_LINE = 2;
+/** Bars on screen at once: the line you are on and what comes next. */
+export const BARS_SHOWN = 4;
+/** A bar narrower than this (px at scale 1) gets a line to itself: 16ths closer than ~18 px blur together. */
+const MIN_BAR_W = 300;
+/** Rows thinner than this (px at scale 1) blur together: show fewer lines instead. */
+const MIN_ROW_H = 22;
+const LABEL_W = 34;
+const HEADER_H = 40;
+/** Space between one line and the next. */
+const LINE_GAP = 18;
+const MAX_ROW_H = 38;
+/** Lines after the first are drawn fainter: readable, but clearly not where you are. */
+const NEXT_LINE_ALPHA = 0.55;
+const CYMBALS = new Set<DrumVoice>(['crash', 'ride', 'hihatClosed', 'hihatOpen', 'hihatPedal']);
+const MISS = '#ff3b3b';
+const ROW_FLASH_MS = 180;
+/** On screen, the space the DOM HUD keeps for itself (combo and score above, song info and practice bar below). */
+const SCREEN_TOP = 118;
+const SCREEN_BOTTOM = 128;
+const SCREEN_SIDE = 36;
+
+export interface GridLayout {
+  barsPerLine: number;
+  lines: number;
+  lineH: number;
+}
+
+/**
+ * Two bars a line where a bar gets at least MIN_BAR_W, else one; as many lines as fit `rows` rows of at least
+ * MIN_ROW_H, up to BARS_SHOWN bars. A wide window gets two lines of two bars, a narrow one lines of one bar.
+ */
+export function gridLayout(f: PaintFrame, rows: number): GridLayout {
+  const usable = f.width - f.side * 2 - LABEL_W * f.scale;
+  const barsPerLine = usable >= 2 * MIN_BAR_W * f.scale ? 2 : 1;
+  const areaH = Math.max(1, f.height - f.top - f.bottom);
+  const minLineH = (HEADER_H + LINE_GAP + rows * MIN_ROW_H) * f.scale;
+  const lines = Math.max(1, Math.min(BARS_SHOWN / barsPerLine, Math.floor(areaH / minLineH)));
+  return { barsPerLine, lines, lineH: areaH / lines };
+}
 
 /** First bar of the line that shows `bar` (1-based). The count-in (bar 0) shows the first line. */
-export function lineFirstBar(bar: number): number {
+export function lineFirstBar(bar: number, barsPerLine: number): number {
   const b = Math.max(1, bar);
-  return b - ((b - 1) % BARS_PER_LINE);
+  return b - ((b - 1) % barsPerLine);
 }
 
 /** Counting syllable for the `i`-th 16th of a beat: the beat number, then e, &, a. */
@@ -54,20 +91,6 @@ export function countLabel(beat: number, i: number): string {
 export function beatsIn(beats: readonly BeatMark[], start: number, end: number): number[] {
   return beats.filter((b) => b.time >= start - 1e-6 && b.time < end - 1e-6).map((b) => b.time);
 }
-
-/** Space the HUD (combo and score above, song info and the practice bar below) keeps for itself. */
-const TOP = 118;
-const BOTTOM = 128;
-const SIDE = 36;
-const LABEL_W = 34;
-const HEADER_H = 40;
-const MAX_ROW_H = 38;
-/** The next line is drawn fainter: readable, but clearly not where you are. */
-const NEXT_LINE_ALPHA = 0.55;
-const CYMBALS = new Set<DrumVoice>(['crash', 'ride', 'hihatClosed', 'hihatOpen', 'hihatPedal']);
-const MISS = '#ff3b3b';
-const ROW_FLASH_MS = 180;
-const MONO = (px: number, weight = 600) => `${weight} ${px}px "JetBrains Mono", monospace`;
 
 interface Stroke {
   voice: DrumVoice;
@@ -89,6 +112,8 @@ export class GridRenderer implements PlayRenderer {
   private startsFor: readonly BeatMark[] | null = null;
   private starts: number[] = [];
   private lastTime = -Infinity;
+  /** The state of the last {@link draw}, for {@link paintTo}. */
+  private last: RenderState | null = null;
 
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -130,7 +155,6 @@ export class GridRenderer implements PlayRenderer {
   }
 
   draw(state: RenderState): void {
-    const { ctx, w, h } = this;
     // A jump back (practice loop, resume run-up, seek) replays those bars: drop the strokes from the last pass.
     if (state.time < this.lastTime - 0.25) this.strokes = this.strokes.filter((s) => s.time < state.time);
     this.lastTime = state.time;
@@ -142,28 +166,44 @@ export class GridRenderer implements PlayRenderer {
       this.startsFor = state.beats;
       this.starts = barStarts(state.beats);
     }
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.last = state;
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.paint(this.ctx, { width: this.w, height: this.h, top: SCREEN_TOP, bottom: SCREEN_BOTTOM, side: SCREEN_SIDE, scale: 1 });
+  }
+
+  /** Lay the last drawn frame out afresh for another surface (the performance video's game column). */
+  paintTo(ctx: CanvasRenderingContext2D, frame: PaintFrame): boolean {
+    if (!this.last) return false;
+    this.paint(ctx, frame);
+    return true;
+  }
+
+  private paint(ctx: CanvasRenderingContext2D, f: PaintFrame): void {
     ctx.fillStyle = '#07070b';
-    ctx.fillRect(0, 0, w, h);
-    if (!this.starts.length) return;
-    const first = lineFirstBar(barAt(state.time, this.starts));
-    const lineH = (h - TOP - BOTTOM) / 2;
-    for (let k = 0; k < 2; k++) {
+    ctx.fillRect(0, 0, f.width, f.height);
+    const state = this.last;
+    if (!state || !this.starts.length) return;
+    const layout = gridLayout(f, this.rows.length);
+    const first = lineFirstBar(barAt(state.time, this.starts), layout.barsPerLine);
+    for (let k = 0; k < layout.lines; k++) {
       const bars: number[] = [];
-      for (let i = 0; i < BARS_PER_LINE; i++) {
-        const bar = first + k * BARS_PER_LINE + i;
+      for (let i = 0; i < layout.barsPerLine; i++) {
+        const bar = first + k * layout.barsPerLine + i;
         if (bar < this.starts.length) bars.push(bar); // the last start only closes the final bar
       }
-      if (bars.length) this.drawLine(state, TOP + k * lineH, lineH - 18, bars, k === 0 ? 1 : NEXT_LINE_ALPHA);
+      if (bars.length) this.drawLine(ctx, f, layout, state, f.top + k * layout.lineH, layout.lineH - LINE_GAP * f.scale, bars, k === 0 ? 1 : NEXT_LINE_ALPHA);
     }
   }
 
-  private drawLine(state: RenderState, y0: number, height: number, bars: number[], alpha: number): void {
-    const { ctx, rows } = this;
-    const width = this.w - SIDE * 2;
-    const barW = (width - LABEL_W) / BARS_PER_LINE;
-    const rowH = Math.min(MAX_ROW_H, (height - HEADER_H) / rows.length);
-    const top = y0 + HEADER_H;
+  private drawLine(ctx: CanvasRenderingContext2D, f: PaintFrame, layout: GridLayout, state: RenderState, y0: number, height: number, bars: number[], alpha: number): void {
+    const { rows } = this;
+    const k = f.scale;
+    const mono = (px: number, weight = 600) => `${weight} ${px * k}px "JetBrains Mono", monospace`;
+    const labelW = LABEL_W * k;
+    const barW = (f.width - f.side * 2 - labelW) / layout.barsPerLine;
+    const headerH = HEADER_H * k;
+    const rowH = Math.min(MAX_ROW_H * k, (height - headerH) / rows.length);
+    const top = y0 + headerH;
     const bottom = top + rowH * rows.length;
     const rowY = (r: number) => top + rowH * (r + 0.5);
     const rowOf = (voice: DrumVoice) => rows.findIndex((r) => r.voices.includes(voice));
@@ -171,17 +211,17 @@ export class GridRenderer implements PlayRenderer {
     ctx.globalAlpha = alpha;
     rows.forEach((r, i) => {
       const lit = alpha === 1 && r.voices.some((v) => now - (this.pulses.get(v) ?? -Infinity) < ROW_FLASH_MS);
-      text(ctx, r.label, SIDE, rowY(i), MONO(11, lit ? 800 : 600), lit ? VOICE_COLORS[r.voices[0]] : 'rgba(255,255,255,.55)');
+      text(ctx, r.label, f.side, rowY(i), mono(11, lit ? 800 : 600), lit ? VOICE_COLORS[r.voices[0]] : 'rgba(255,255,255,.55)');
       ctx.strokeStyle = 'rgba(255,255,255,.07)';
-      ctx.lineWidth = 1;
-      line(ctx, SIDE + LABEL_W, rowY(i), SIDE + LABEL_W + barW * bars.length, rowY(i));
+      ctx.lineWidth = k;
+      line(ctx, f.side + labelW, rowY(i), f.side + labelW + barW * bars.length, rowY(i));
     });
     bars.forEach((bar, bi) => {
-      const bx = SIDE + LABEL_W + bi * barW;
+      const bx = f.side + labelW + bi * barW;
       const start = this.starts[bar - 1];
       const end = this.starts[bar];
       const xAt = (t: number) => bx + ((t - start) / (end - start)) * barW;
-      text(ctx, `BAR ${bar}`, bx, y0 + 2, MONO(11, 700), 'rgba(255,255,255,.7)', 'left', 'top');
+      text(ctx, `BAR ${bar}`, bx, y0 + 2 * k, mono(11, 700), 'rgba(255,255,255,.7)', 'left', 'top');
       // columns: bar line, beats, and the three 16ths between beats, with the count above
       const beats = beatsIn(state.beats, start, end);
       beats.forEach((bt, b) => {
@@ -189,9 +229,9 @@ export class GridRenderer implements PlayRenderer {
         for (let i = 0; i < 4; i++) {
           const x = xAt(bt + ((next - bt) * i) / 4);
           ctx.strokeStyle = i ? 'rgba(255,255,255,.06)' : b ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.45)';
-          ctx.lineWidth = b === 0 && i === 0 ? 2 : 1;
+          ctx.lineWidth = (b === 0 && i === 0 ? 2 : 1) * k;
           line(ctx, x, top, x, bottom);
-          text(ctx, countLabel(b + 1, i), x, top - 9, MONO(i ? 10 : 12, i ? 400 : 700), i ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.8)', 'center');
+          text(ctx, countLabel(b + 1, i), x, top - 9 * k, mono(i ? 10 : 12, i ? 400 : 700), i ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.8)', 'center');
         }
       });
       // notes, where they fall in time (a humanised note sits a little off its column, as played)
@@ -200,23 +240,23 @@ export class GridRenderer implements PlayRenderer {
         const r = rowOf(n.voice);
         if (r < 0) continue;
         const color = n.state === 'hit' && n.judgement ? JUDGE_COLORS[n.judgement] : n.state === 'missed' ? MISS : VOICE_COLORS[n.voice];
-        glyph(ctx, n.voice, xAt(n.time), rowY(r), rowH, n.velocity, color, alpha * (n.state === 'missed' ? 0.6 : 1));
+        glyph(ctx, n.voice, xAt(n.time), rowY(r), rowH, k, n.velocity, color, alpha * (n.state === 'missed' ? 0.6 : 1));
       }
       ctx.globalAlpha = alpha;
       // your strokes: a tick where the stick actually landed, in the judgement's colour
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 * k;
       for (const s of this.strokes) {
         if (s.time < start || s.time >= end) continue;
         const r = rowOf(s.voice);
         if (r < 0) continue;
         ctx.strokeStyle = s.judgement === 'over' ? MISS : JUDGE_COLORS[s.judgement];
-        line(ctx, xAt(s.time), top + rowH * r + 2, xAt(s.time), top + rowH * (r + 1) - 2);
+        line(ctx, xAt(s.time), top + rowH * r + 2 * k, xAt(s.time), top + rowH * (r + 1) - 2 * k);
       }
       if (alpha === 1 && state.time >= start && state.time < end) {
         const x = xAt(state.time);
         ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
-        line(ctx, x, top - 18, x, bottom + 4);
+        ctx.lineWidth = 2 * k;
+        line(ctx, x, top - 18 * k, x, bottom + 4 * k);
       }
     });
     ctx.globalAlpha = 1;
@@ -254,14 +294,14 @@ function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, fo
  * A note: an x for cymbals and hats (circled above when open), a disc for drums. Louder notes are bigger; a
  * ghost note (velocity < 0.3) is a small hollow ring, an accent (> 0.85) gets a second ring.
  */
-function glyph(ctx: CanvasRenderingContext2D, voice: DrumVoice, x: number, y: number, rowH: number, velocity: number, color: string, alpha: number): void {
+function glyph(ctx: CanvasRenderingContext2D, voice: DrumVoice, x: number, y: number, rowH: number, k: number, velocity: number, color: string, alpha: number): void {
   const ghost = velocity < 0.3;
   const accent = velocity > 0.85;
-  const r = Math.min(14, rowH * (ghost ? 0.16 : 0.2 + 0.12 * Math.min(1, velocity)));
+  const r = Math.min(14 * k, rowH * (ghost ? 0.16 : 0.2 + 0.12 * Math.min(1, velocity)));
   ctx.globalAlpha = alpha;
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
-  ctx.lineWidth = ghost ? 1.2 : accent ? 3 : 2;
+  ctx.lineWidth = (ghost ? 1.2 : accent ? 3 : 2) * k;
   if (CYMBALS.has(voice)) {
     ctx.beginPath();
     ctx.moveTo(x - r, y - r);
@@ -270,9 +310,9 @@ function glyph(ctx: CanvasRenderingContext2D, voice: DrumVoice, x: number, y: nu
     ctx.lineTo(x - r, y + r);
     ctx.stroke();
     if (voice === 'hihatOpen') {
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.5 * k;
       ctx.beginPath();
-      ctx.arc(x, y - r - 5, 3.5, 0, Math.PI * 2);
+      ctx.arc(x, y - r - 5 * k, 3.5 * k, 0, Math.PI * 2);
       ctx.stroke();
     }
   } else {
@@ -281,9 +321,9 @@ function glyph(ctx: CanvasRenderingContext2D, voice: DrumVoice, x: number, y: nu
     if (ghost) ctx.stroke();
     else ctx.fill();
     if (accent && !ghost) {
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.5 * k;
       ctx.beginPath();
-      ctx.arc(x, y, r + 3, 0, Math.PI * 2);
+      ctx.arc(x, y, r + 3 * k, 0, Math.PI * 2);
       ctx.stroke();
     }
   }
