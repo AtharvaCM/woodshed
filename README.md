@@ -1,6 +1,6 @@
 # WOODSHED
 
-A browser practice room for e-drummers. Plug a Roland TD-07 (or any USB-MIDI kit) into Chrome, pick a song, and play it on a Guitar-Hero-style highway that scores every hit. Slow the hard bars down, loop them, then take the full run. Build charts for songs nobody has charted, starting with Hindi/Bollywood tracks.
+A browser practice room for e-drummers. Plug a Roland TD-07 (or any USB-MIDI kit) into Chrome, pick a song, and play it from drum-tab lines (or a Guitar-Hero-style highway) that score every hit. Slow the hard bars down, loop them, then take the full run. Build charts for songs nobody has charted, starting with Hindi/Bollywood tracks.
 
 *Woodshed* is jazz slang for practising hard, alone, until it sits.
 
@@ -32,7 +32,8 @@ Switch `USBDrv` to `VENDOR` and install Roland's driver only when you want the m
 
 ## What it does today
 
-- **Highway**: hi-hat, snare, kick, toms, ride lanes and a full-width crash bar. Four difficulties per song; easier charts derive automatically from the hardest one.
+- **Grid view** (default): the chart as drum-tab lines, two bars a line with the next line underneath and a playhead sweeping across. Every drum has a fixed row in notation order and every 16th a fixed column, so a groove looks the same each time round; notes are sized by velocity (ghosts hollow, accents ringed) and your strokes show as ticks where they landed.
+- **Highway**: hi-hat, snare, kick, toms, ride lanes and a full-width crash bar. Settings → View & controls, or the VIEW button in practice, switches between the two. Four difficulties per song; easier charts derive automatically from the hardest one.
 - **Scoring**: perfect/great/good windows (scaled by *Hit window size* in Settings), combo, stars, full-combo badge, local leaderboards.
 - **Practice mode**: 50–125 % speed (presets on the song screen), bar counter, loop 1/2/4/8 bars from the current bar, jump bar by bar, guide drums on/off mid-take. Keys: `↑`/`↓` speed, `←`/`→` bar, `1` `2` `4` `8` loop, `0` no loop. Nothing is saved.
 - **Where it slipped**: the results screen colours every bar by accuracy and picks your weakest 4-bar stretch; `P` (or the button) drops you straight into practice looping those bars.
@@ -40,7 +41,7 @@ Switch `USBDrv` to `VENDOR` and install Roland's driver only when you want the m
 - **Studio**: turn any audio file into a song. Tap tempo, set the downbeat offset, then record a take on the kit with count-in and click, quantize it (1/4…1/32, triplets, strength, double-hit merge), and polish it in the piano-roll chart editor. Export as standard MIDI (GM drums, channel 10) or as a song-folder zip. There is no MIDI *import* button yet; a chart made elsewhere goes in as `expert.mid` inside a song folder (see below).
 - **Song folders**: `song.json` + audio + one MIDI per difficulty + optional samples/artwork. Drag a zip onto the song list to import. Format: [docs/SONG-FORMAT.md](docs/SONG-FORMAT.md).
 - **Pad Setup wizard**: per-device bindings, presets for Roland V-Drums, Yamaha FGDP, generic 4×4 pads and General MIDI, live MIDI monitor with timestamp health.
-- **Performance video**: record webcam + highway + HUD in the browser (WebM). Handy for cover-video takes.
+- **Performance video**: record webcam + grid or highway + HUD in the browser (WebM). Handy for cover-video takes.
 - **Menus from the kit**: high tom ▲, mid tom ▼, floor tom twice = select, crash twice = back, on the title, song list, pause menu and results. Only after a short pause in playing, so grooves and fills never move the menu. Toggle in Settings → Lanes & Controls.
 - **Keyboard fallback** so the app runs with no hardware: `Space`/`B` kick, `F`/`J` snare, `D` hat closed, `S` hat open, `G`/`H`/`K` toms high/mid/low, `L` ride, `A`/`;` crash.
 
@@ -90,7 +91,7 @@ src/audio/        AudioEngine, Transport, synthesized DrumKit, ChartPlayer, Metr
 src/song/         song folder/zip packaging, IndexedDB library
 src/store/        scores, device configs, settings (localStorage)
 src/input/        Web MIDI + keyboard → unified hit stream
-src/game/         Judge (scoring), HighwayRenderer, GameSession, video recorder
+src/game/         Judge (scoring), GridRenderer + HighwayRenderer, GameSession, video recorder
 src/ui/           screens: title, song select, game, results, pad wizard, studio, settings
 docs/             SONG-FORMAT.md, ROADMAP.md, research.md
 ```

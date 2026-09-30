@@ -45,6 +45,28 @@ export interface RenderState {
   accent?: string;
 }
 
+/**
+ * What a play session draws with. Two implementations: {@link HighwayRenderer} (the perspective road inherited
+ * from DRUMKILLER) and GridRenderer (drum-tab lines, the default on a real kit). Hooks a view has no use for are
+ * no-ops.
+ */
+export interface PlayRenderer {
+  draw(state: RenderState): void;
+  resize(): void;
+  setReducedMotion(on: boolean): void;
+  setLaneOrder(order: Lane[]): void;
+  setRenderScale(scale: number): void;
+  /** Feed a background visualiser from the master bus. */
+  setAnalyser(analyser: AnalyserNode | null): void;
+  /** Any pad hit, judged or not. */
+  drumPulse(voice: DrumVoice, velocity?: number): void;
+  hitFlash(voice: DrumVoice, judgement: Judgement | 'over'): void;
+  hitGhost(voice: DrumVoice, delta: number, velocity: number, judgement: Judgement): void;
+  streakBurst(): void;
+  /** A judged stroke at chart time `time`: a hit (with its judgement) or an overhit. */
+  stroke(voice: DrumVoice, time: number, judgement: Judgement | 'over'): void;
+}
+
 interface Particle {
   x: number;
   y: number;
@@ -103,7 +125,7 @@ interface StaticLayers {
 /**
  * Canvas 2D pseudo-3D highway renderer. Independent of game logic; the session feeds it a RenderState each frame.
  */
-export class HighwayRenderer {
+export class HighwayRenderer implements PlayRenderer {
   private ctx: CanvasRenderingContext2D;
   private w = 0;
   private h = 0;
@@ -263,6 +285,9 @@ export class HighwayRenderer {
       this.shake = Math.max(this.shake, 3);
     }
   }
+
+  /** The highway shows strokes as hit ghosts instead. */
+  stroke(): void {}
 
   streakBurst(): void {
     if (this.reduced) return;

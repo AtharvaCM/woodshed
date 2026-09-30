@@ -297,7 +297,12 @@ export interface Settings {
   renderScale: RenderScale;
   /** Drive menus from the kit: high tom / mid tom move, floor tom ×2 selects, crash ×2 goes back. */
   padNavigation: boolean;
+  /** How the chart is drawn while playing: drum-tab lines (grid) or the perspective highway. */
+  playView: PlayView;
 }
+
+export type PlayView = 'grid' | 'highway';
+export const PLAY_VIEWS: PlayView[] = ['grid', 'highway'];
 
 export type RenderScale = 1 | 1.5 | 2;
 export const RENDER_SCALES: RenderScale[] = [2, 1.5, 1];
@@ -337,4 +342,5 @@ export const DEFAULT_SETTINGS: Settings = {
   recordResolution: 720,
   renderScale: 2,
   padNavigation: true,
+  playView: 'grid',
 };

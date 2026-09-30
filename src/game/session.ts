@@ -1,9 +1,10 @@
-import type { Chart, Difficulty, DrumVoice, InputHit, Lane, ScoreSummary, SongMeta } from '@/types';
+import type { Chart, Difficulty, DrumVoice, InputHit, Lane, PlayView, ScoreSummary, SongMeta } from '@/types';
 import { Transport, ChartPlayer } from '@/audio';
 import type { AudioEngine, DrumKit } from '@/audio';
 import { ticksToSeconds } from '@/midi';
 import { Judge, type JudgeEvent } from './scoring';
-import { HighwayRenderer, type BeatMark, type RenderState } from './renderer';
+import { HighwayRenderer, type BeatMark, type PlayRenderer, type RenderState } from './renderer';
+import { GridRenderer } from './gridRenderer';
 
 export type GameMode = 'play' | 'practice';
 
@@ -23,6 +24,8 @@ export interface SessionConfig {
   drumSoundsOnHit: boolean;
   reducedMotion: boolean;
   laneOrder: Lane[];
+  /** Drum-tab lines or the highway (switchable mid-take with {@link GameSession.setView}). */
+  view: PlayView;
   /** Cap on canvas device pixels per CSS pixel (see Settings.renderScale). */
   renderScale: number;
   /** Loop region for practice (chart seconds). */
@@ -45,7 +48,8 @@ export interface SessionCallbacks {
 export class GameSession {
   readonly transport: Transport;
   readonly judge: Judge;
-  readonly renderer: HighwayRenderer;
+  /** Replaced by {@link setView}; read it fresh rather than keeping a reference. */
+  renderer: PlayRenderer;
   readonly beats: BeatMark[];
   private guide: ChartPlayer | null = null;
   private raf = 0;
@@ -62,7 +66,7 @@ export class GameSession {
   constructor(
     private engine: AudioEngine,
     private kit: DrumKit,
-    canvas: HTMLCanvasElement,
+    private canvas: HTMLCanvasElement,
     readonly cfg: SessionConfig,
     private cb: SessionCallbacks,
     private inputSource: { onHit(fn: (hit: InputHit) => void): () => void },
@@ -76,10 +80,7 @@ export class GameSession {
       overhitBreaksCombo: true,
       windowScale: cfg.hitWindowScale,
     });
-    this.renderer = new HighwayRenderer(canvas);
-    this.renderer.setReducedMotion(cfg.reducedMotion);
-    this.renderer.setLaneOrder(cfg.laneOrder);
-    this.renderer.setRenderScale(cfg.renderScale);
+    this.renderer = this.makeRenderer(cfg.view);
     // Background visualiser: tap the master bus (song + drums) with an analyser. Never fatal if unavailable.
     try {
       const an = engine.ctx.createAnalyser();
@@ -103,6 +104,26 @@ export class GameSession {
     // Compensate for audio output latency: what the player hears is later than the audio clock.
     this.latencyComp = engine.inputLatencyCompensation;
     window.addEventListener('resize', this.resizeHandler);
+  }
+
+  private makeRenderer(view: PlayView): PlayRenderer {
+    const r = view === 'highway' ? new HighwayRenderer(this.canvas) : new GridRenderer(this.canvas);
+    r.setReducedMotion(this.cfg.reducedMotion);
+    r.setLaneOrder(this.cfg.laneOrder);
+    r.setRenderScale(this.cfg.renderScale);
+    return r;
+  }
+
+  get view(): PlayView {
+    return this.cfg.view;
+  }
+
+  /** Switch between the grid and the highway, mid-take if need be. */
+  setView(view: PlayView): void {
+    if (view === this.cfg.view) return;
+    (this.cfg as { view: PlayView }).view = view;
+    this.renderer = this.makeRenderer(view);
+    this.renderer.setAnalyser(this.analyser);
   }
 
   get audioDuration(): number {
@@ -230,7 +251,8 @@ export class GameSession {
     const t = this.judgeTime(pos - this.cfg.meta.offset);
     this.renderer.drumPulse(hit.voice, hit.velocity);
     if (t < -0.5 || !this.judge.judges(hit.voice)) return;
-    this.judge.hit(hit.voice, t);
+    const ev = this.judge.hit(hit.voice, t);
+    this.renderer.stroke(ev.voice, t, ev.kind === 'hit' ? ev.judgement : 'over');
   }
 
   private handleJudge(ev: JudgeEvent): void {

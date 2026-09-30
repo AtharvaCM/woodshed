@@ -1,5 +1,5 @@
 import type { App, Screen } from '@/app';
-import { DRUM_VOICES, VOICE_LABELS, type DrumVoice } from '@/types';
+import { DRUM_VOICES, VOICE_LABELS, type DrumVoice, type PlayView } from '@/types';
 import { h, button, field, select, toast, clear, downloadBlob, pickFile, fmtAgo } from './dom';
 import { openCamera, videoRecordingSupported } from '@/game/videoRecorder';
 import { topbar } from './topbar';
@@ -13,7 +13,7 @@ type SettingsTab = 'timing' | 'audio' | 'lanes' | 'video' | 'data';
 const TABS: { id: SettingsTab; label: string; hint: string }[] = [
   { id: 'timing', label: 'TIMING', hint: 'calibration, hit windows' },
   { id: 'audio', label: 'SOUND & SCREEN', hint: 'volumes, motion, resolution' },
-  { id: 'lanes', label: 'LANES & CONTROLS', hint: 'highway order, pads, keyboard' },
+  { id: 'lanes', label: 'VIEW & CONTROLS', hint: 'grid or highway, lane order, pads, keyboard' },
   { id: 'video', label: 'VIDEO', hint: 'record your takes' },
   { id: 'data', label: 'PROFILE & DATA', hint: 'name, scores, devices' },
 ];
@@ -266,7 +266,20 @@ export function settingsScreen(app: App, params?: Record<string, unknown>): Scre
       ),
     ],
     lanes: [
-      h('h3', { style: { marginTop: 0 } }, 'Highway lanes (left → right)'),
+      h('h3', { style: { marginTop: 0 } }, 'Play view'),
+      field(
+        'Draw the chart as',
+        select(
+          [
+            { value: 'grid', label: 'Grid — drum-tab lines, two bars a line (for a kit)' },
+            { value: 'highway', label: 'Highway — notes scroll toward a strike line' },
+          ],
+          s.playView,
+          (v) => app.settingsStore.update({ playView: v as PlayView }),
+        ),
+        'The grid gives every drum a fixed row and every beat a fixed column, so a groove looks the same each time round. Practice mode can switch mid-take.',
+      ),
+      h('h3', null, 'Highway lanes (left → right)'),
       h('div', { class: 'small dim', style: { marginBottom: '10px' } }, 'Arrange the drums to match how your pads are laid out.'),
       laneEditor,
       h('h3', null, 'Menus from the kit'),
