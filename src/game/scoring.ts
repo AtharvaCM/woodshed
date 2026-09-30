@@ -25,6 +25,14 @@ export function hitWindowsFor(difficulty: Difficulty, scale = 1): HitWindows {
 export const NEAR_MISS_RANGE = 0.5;
 /** A note counts as isolated (usable for timing diagnosis) if no same-lane note is closer than this. */
 export const ISOLATION_RANGE = 0.5;
+/**
+ * Lenient voices: how much nearer (seconds) a same-lane note of another drum has to be to win over one of the
+ * drum actually struck. Small, so the nearer note wins (a closed hat struck where the open one is charted takes
+ * that note rather than reaching for the next closed one), yet notes charted together still go to the right drum.
+ */
+const OTHER_VOICE_SLACK = 0.02;
+/** Notes this close to each other count as struck together (a chord, or a slightly humanised one), never as a double. */
+const TOGETHER = 0.015;
 
 export const BASE_NOTE_SCORE = 100;
 export const MAX_MULTIPLIER = 4;
@@ -35,7 +43,8 @@ export interface JudgeEvent {
   kind: 'hit' | 'miss' | 'overhit';
   judgement: Judgement;
   /** Signed timing error (hit time - note time), seconds. 0 for misses. For overhits: distance to the nearest
-   * un-hit note of the same lane within NEAR_MISS_RANGE, or NaN if there is none. */
+   * un-hit note of the same lane within NEAR_MISS_RANGE, or NaN if there is none or the stroke doubled a note
+   * already played. */
   delta: number;
   voice: DrumVoice;
   noteIndex: number; // -1 for overhits
@@ -149,6 +158,12 @@ export class Judge {
 
   /**
    * Process a hit at chart time `t` for `voice`.
+   *
+   * A stroke belongs to the nearest note on its lane. When that note has already been played, the stroke is a
+   * double (a flam, a pedal chick, a beater bounce); when strict voices will not take it, it is the wrong drum.
+   * Either way it is an overhit and claims nothing. Reaching past it for the next pending note instead shifted
+   * every later stroke of a dense run onto the note after its own: one extra hat stroke turned the rest of a
+   * 16th run at 108 BPM into "good, 136 ms early" (the good window is wider than a 16th).
    */
   hit(voice: DrumVoice, t: number): JudgeEvent {
     const lane = LANE_FOR_VOICE[voice];
@@ -156,28 +171,37 @@ export class Judge {
     let best: TrackedNote | null = null;
     let bestScore = Infinity;
     let bestExact = false;
-    // Scan pending notes within the window.
-    for (let i = this.nextPendingIndex; i < this.notes.length; i++) {
+    /** Nearest note on the lane that this stroke cannot claim: played, missed, or a drum strict voices refuse. */
+    let blocker: TrackedNote | null = null;
+    let blockerDist = Infinity;
+    // Notes already played just before the first pending one can be the nearest, so start inside the window.
+    let i = this.nextPendingIndex;
+    while (i > 0 && this.notes[i - 1].time >= t - win) i--;
+    for (; i < this.notes.length; i++) {
       const n = this.notes[i];
       if (n.time - t > win) break;
-      if (n.state !== 'pending') continue;
-      if (t - n.time > win) continue;
+      if (t - n.time > win || LANE_FOR_VOICE[n.voice] !== lane) continue;
       const exact = n.voice === voice;
-      const sameLane = LANE_FOR_VOICE[n.voice] === lane;
-      if (!exact && !sameLane) continue;
-      if (!exact && this.opts.strictVoices) continue;
-      // Prefer exact voice matches, then closest in time.
-      const dist = Math.abs(n.time - t) + (exact ? 0 : 1);
-      if (dist < bestScore) {
-        bestScore = dist;
-        best = n;
-        bestExact = exact;
+      const dist = Math.abs(n.time - t);
+      if (n.state === 'pending' && (exact || !this.opts.strictVoices)) {
+        // The exact drum wins among notes charted together; otherwise the nearer note does.
+        const score = dist + (exact ? 0 : OTHER_VOICE_SLACK);
+        if (score < bestScore) {
+          bestScore = score;
+          best = n;
+          bestExact = exact;
+        }
+      } else if (dist < blockerDist) {
+        blockerDist = dist;
+        blocker = n;
       }
     }
+    if (best && blockerDist + TOGETHER < Math.abs(best.time - t)) best = null;
     if (!best) {
       this.overhits++;
       if (this.opts.overhitBreaksCombo) this.combo = 0;
-      const near = this.nearestDelta(lane, t);
+      // A double of a played note says nothing about timing; anything else may be a near miss worth explaining.
+      const near = blocker?.state === 'hit' ? NaN : this.nearestDelta(lane, t);
       if (!Number.isNaN(near)) {
         this.nearMissSigned += near;
         this.nearMissCount++;

@@ -28,6 +28,8 @@ Songs-first. Every phase ends with something playable on the TD-07.
 ## Phase 3 — TD-07 specifics
 
 - [x] Highway, miss detection and playhead follow the *heard* audio time (output latency removed via `getOutputTimestamp`), not the raw audio clock. Needed the moment the Mac's audio went to the TD-07 over Bluetooth (280 ms). Done 2026-09-28.
+- [x] Stray strokes no longer wreck a run. The judge used to hand an extra stroke (pedal chick, beater bounce, crash edge + bow) the next pending note; the good window (±165 ms at ×1.5) is wider than a 16th at 108 BPM (139 ms), so one chick in a 16th hat run turned the rest into "good, 136 ms early" (100 % → 59 %). Now a stroke belongs to the nearest note on its lane and a double is an overhit, and mapped MIDI hits pass a 60 ms per-voice retrigger filter. Done 2026-09-30.
+- [ ] Hi-hat pedal as its own voice (a foot row, judged only when charted). Blocked on the charts: drum2midi writes 44 for quiet hand hats (190 in Labon Ko, most filling gaps in the 16th run), so 44 cannot mean "foot" until the pipeline folds those into 42.
 - [ ] Read CC#4 in `src/input/midi.ts`: classify half-open hats, expose pedal position to the HUD; calibrate the ~90 closed ceiling per device.
 - [ ] Double-kick stats: inter-onset spacing and evenness for consecutive note-36 hits (both beaters share one note).
 - [ ] Session log to IndexedDB: per take, per section, per voice timing error and velocity spread (the data the coach reads).
