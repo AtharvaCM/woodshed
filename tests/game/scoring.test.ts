@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Judge, hitWindowsFor, starsForRatio, starString } from '@/game/scoring';
+import { Judge, hitWindowsFor, starsForRatio, starString, type JudgeEvent } from '@/game/scoring';
 import type { ChartNote } from '@/types';
 
 function n(time: number, voice: ChartNote['voice']): ChartNote {
@@ -96,6 +96,74 @@ describe('Judge', () => {
     expect(j.timingStats().count).toBe(0);
     j.hit('kick', 3.25); // overhit 250ms late near the isolated kick
     expect(j.timingStats()).toEqual({ mean: expect.closeTo(0.25, 5), count: 1 });
+  });
+
+  describe('a stroke belongs to the nearest note on its lane', () => {
+    const SIXTEENTH = 60 / 108 / 4; // 139 ms: narrower than the ±165 ms good window at the default ×1.5
+    const wide = { ...opts, windowScale: 1.5 };
+    const run = (voices: ChartNote['voice'][]) => voices.map((v, i) => n(1 + i * SIXTEENTH, v));
+
+    it('an extra stroke in a 16th run is a double and shifts nothing', () => {
+      const hats = run(Array(16).fill('hihatClosed'));
+      const j = new Judge(hats, wide);
+      const events: JudgeEvent[] = [];
+      hats.forEach((h, i) => {
+        if (i === 4) events.push(j.hit('hihatClosed', h.time)); // a pedal chick on beat 2 (44 plays as a closed hat)
+        events.push(j.hit('hihatClosed', h.time + 0.003));
+      });
+      expect(j.hits).toEqual({ perfect: 16, great: 0, good: 0, miss: 0 });
+      expect(j.overhits).toBe(1);
+      const double = events.find((e) => e.kind === 'overhit')!;
+      expect(Number.isNaN(double.delta)).toBe(true);
+      expect(j.timingStats().count).toBe(0);
+    });
+
+    it('a beater bounce does not steal the next kick', () => {
+      const kicks = [n(1, 'kick'), n(1 + SIXTEENTH, 'kick')]; // Labon Ko's kick on the "&" and "a" of 2
+      const j = new Judge(kicks, wide);
+      expect(j.hit('kick', 1.003).judgement).toBe('perfect');
+      const bounce = j.hit('kick', 1.053);
+      expect(bounce.kind).toBe('overhit');
+      expect(Number.isNaN(bounce.delta)).toBe(true);
+      expect(j.hit('kick', 1 + SIXTEENTH + 0.003).judgement).toBe('perfect');
+    });
+
+    it('strict: a closed hat on an open-hat note does not take the next closed one', () => {
+      const hats = run(['hihatClosed', 'hihatClosed', 'hihatOpen', 'hihatClosed', 'hihatClosed']);
+      const j = new Judge(hats, wide);
+      const events = hats.map((h) => j.hit('hihatClosed', h.time)); // pedal never lifted
+      expect(events[2].kind).toBe('overhit');
+      expect(events.filter((e) => e.kind === 'hit').map((e) => e.judgement)).toEqual(['perfect', 'perfect', 'perfect', 'perfect']);
+      j.update(3);
+      expect(j.notes[2].state).toBe('missed');
+    });
+
+    it('lenient: the wrong hat takes the nearer note, not the next exact one', () => {
+      const hats = run(['hihatClosed', 'hihatOpen', 'hihatClosed']);
+      const j = new Judge(hats, { ...wide, strictVoices: false });
+      const events = hats.map((h) => j.hit('hihatClosed', h.time));
+      expect(events.map((e) => [e.kind, e.judgement, e.noteIndex])).toEqual([
+        ['hit', 'perfect', 0],
+        ['hit', 'great', 1],
+        ['hit', 'perfect', 2],
+      ]);
+    });
+
+    it('two drums of a lane struck together each take their own note', () => {
+      const j = new Judge([n(1, 'tomHigh'), n(1.008, 'tomLow')], wide); // a two-tom hit, humanised 8 ms apart
+      expect(j.hit('tomHigh', 1).judgement).toBe('perfect');
+      expect(j.hit('tomLow', 1.002).judgement).toBe('perfect');
+      expect(j.overhits).toBe(0);
+    });
+
+    it('a stroke nearer a note already played than its own note is a double', () => {
+      const hats = run(['hihatClosed', 'hihatClosed']);
+      const j = new Judge(hats, wide);
+      j.hit('hihatClosed', hats[0].time);
+      // 80 ms early for the second hat is 59 ms after the first: more than half a 16th off, so it doubles the first
+      expect(j.hit('hihatClosed', hats[1].time - 0.08).kind).toBe('overhit');
+      expect(j.notes[1].state).toBe('pending');
+    });
   });
 
   it('window scale widens all windows', () => {

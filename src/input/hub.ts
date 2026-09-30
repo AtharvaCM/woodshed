@@ -1,11 +1,13 @@
 import type { DeviceConfig, DrumVoice, InputHit } from '@/types';
 import { MidiInput, type RawMidiHit } from './midi';
 import { KeyboardInput } from './keyboard';
+import { RetriggerFilter } from './retrigger';
 import { voiceForMidi } from '@/store/devices';
 
 /**
  * InputHub fuses MIDI + keyboard into a single stream of DrumVoice hits,
- * applying the active DeviceConfig for MIDI note → voice mapping.
+ * applying the active DeviceConfig for MIDI note → voice mapping. Mapped MIDI hits pass a
+ * retrigger filter (pad double triggers, beater bounce); the raw stream is left untouched.
  */
 export class InputHub {
   readonly midi = new MidiInput();
@@ -13,6 +15,7 @@ export class InputHub {
   private device: DeviceConfig | null = null;
   private listeners = new Set<(hit: InputHit) => void>();
   private rawListeners = new Set<(hit: RawMidiHit) => void>();
+  private retrigger = new RetriggerFilter();
   /** Raw hits that could not be mapped (used to nudge users to run the wizard). */
   unmappedCount = 0;
   lastUnmapped: RawMidiHit | null = null;
@@ -55,6 +58,7 @@ export class InputHub {
       this.lastUnmapped = raw;
       return;
     }
+    if (!this.retrigger.accept(voice, raw.timeStamp)) return;
     this.emit({
       voice,
       velocity: raw.velocity / 127,

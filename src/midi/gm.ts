@@ -173,8 +173,9 @@ export function makeBindings(
  * Roland V-Drums modules (TD-07 / TD-17 / TD-27 …) at their factory MIDI note map
  * (Roland KB "TD-07KV: Default MIDI Note Map"). The module chooses the open or closed
  * hi-hat note itself from the pedal position (CC#4), so the open/closed split works
- * without reading controllers. The pedal "chick" (44) counts as a closed hat; unbind it
- * in Pad Setup if foot-chicks cause overhits. Tom rims 50/47 exist on TD-17/27 kits and
+ * without reading controllers. The pedal "chick" (44) counts as a closed hat: struck with a
+ * hand hat, the retrigger filter drops one of the two; elsewhere it is an overhit, so unbind it
+ * in Pad Setup if foot-chicks get in the way. Tom rims 50/47 exist on TD-17/27 kits and
  * on the TD-07KX/KVX; the DMK/KV toms are single-zone. The ride bell (53) needs a 3-zone
  * ride (KVX). Tom 3 rim (58) is left out because GM calls 58 Vibraslap.
  */
