@@ -222,6 +222,9 @@ export class GridRenderer implements PlayRenderer {
       const end = this.starts[bar];
       const xAt = (t: number) => bx + ((t - start) / (end - start)) * barW;
       text(ctx, `BAR ${bar}`, bx, y0 + 2 * k, mono(11, 700), 'rgba(255,255,255,.7)', 'left', 'top');
+      // a section starting here gets its name beside the bar number
+      const section = state.sections?.find((s) => s.bar === bar);
+      if (section) text(ctx, section.name.toUpperCase(), bx + 62 * k, y0 + 2 * k, mono(11, 800), state.accent ?? '#ffe600', 'left', 'top');
       // columns: bar line, beats, and the three 16ths between beats, with the count above
       const beats = beatsIn(state.beats, start, end);
       beats.forEach((bt, b) => {

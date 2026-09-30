@@ -1,4 +1,4 @@
-import type { Chart, Difficulty, DrumVoice, InputHit, Lane, PlayView, ScoreSummary, SongMeta } from '@/types';
+import type { Chart, Difficulty, DrumVoice, InputHit, Lane, PlayView, ScoreSummary, SongMeta, SongSection } from '@/types';
 import { Transport, ChartPlayer } from '@/audio';
 import type { AudioEngine, DrumKit } from '@/audio';
 import { ticksToSeconds } from '@/midi';
@@ -26,6 +26,8 @@ export interface SessionConfig {
   laneOrder: Lane[];
   /** Drum-tab lines or the highway (switchable mid-take with {@link GameSession.setView}). */
   view: PlayView;
+  /** Named sections, drawn on the grid's bar headers. */
+  sections?: SongSection[];
   /** Cap on canvas device pixels per CSS pixel (see Settings.renderScale). */
   renderScale: number;
   /** Loop region for practice (chart seconds). */
@@ -311,6 +313,7 @@ export class GameSession {
       mode: this.cfg.mode,
       paused: this.paused,
       accent: this.cfg.meta.accent,
+      sections: this.cfg.sections,
     };
     this.renderer.draw(state);
     this.cb.onFrame?.();

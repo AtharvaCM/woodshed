@@ -8,3 +8,4 @@ export * from './gm';
 export * from './chart';
 export * from './quantize';
 export * from './difficulty';
+export * from './songMap';
