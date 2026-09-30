@@ -22,10 +22,13 @@ Songs-first. Every phase ends with something playable on the TD-07.
 - [ ] `scripts/song-from-audio.mjs`: audio in → song folder out (calls demucs-mlx / demucs / drum2midi, writes `song.json` with bpm + offset guess, zips it for drag-and-drop import).
 - [ ] **IMPORT MIDI** button in the Studio chart editor (load a `.mid` into the current difficulty), so step 4 above stops needing a hand-made folder.
 - [ ] Songsterr scaffold importer: part JSON → expert.mid (respect ToS; user supplies the URL).
+- [ ] Auto song map to seed those markers. A prototype (2026-09-30) clustered bars on a 16th grid (leader clustering, then merging patterns within Jaccard 0.3; three repeats make a pattern) and found Labon Ko's one groove across 114 of 152 bars, the two interludes (71–73, 106–112) and 18 one-offs. Lost to the grid view as a play screen, but it is the section detector and a chart-noise finder (groove bars still differ by ~5 notes, mostly toms on the kick's slots).
 - [ ] Section markers in `song.json` (intro / hook / verse / interlude) so practice loops can jump by section instead of A/B points.
 - [ ] Hindi song ladder seeded from `docs/research.md` §4 (Kabhi Kabhi Aditi 95 → Tum Se Hi 130 → Yaaron 114 → Kya Mujhe Pyaar Hai 118 → Tu Hi Meri Shab Hai 119 → Khuda Jaane 79 → Maeri 83 → Aahatein 141 → Manja 106 in 3/4).
 
 ## Phase 3 — TD-07 specifics
+
+- [x] Play screen for a kit: a prototype pitted the highway against a grid, a song map + groove card, and a memory view (grooves hidden, changes shown) on Labon Ko. The grid won — fixed lines, a fixed place for every hit, so the mental model is easy. `GridRenderer` is now the default view; the highway stays one setting (or the practice VIEW button) away. Done 2026-09-30. Next: lay the grid out for the video's portrait-ish game column instead of letterboxing it.
 
 - [x] Highway, miss detection and playhead follow the *heard* audio time (output latency removed via `getOutputTimestamp`), not the raw audio clock. Needed the moment the Mac's audio went to the TD-07 over Bluetooth (280 ms). Done 2026-09-28.
 - [x] Stray strokes no longer wreck a run. The judge used to hand an extra stroke (pedal chick, beater bounce, crash edge + bow) the next pending note; the good window (±165 ms at ×1.5) is wider than a 16th at 108 BPM (139 ms), so one chick in a 16th hat run turned the rest into "good, 136 ms early" (100 % → 59 %). Now a stroke belongs to the nearest note on its lane and a double is an overhit, and mapped MIDI hits pass a 60 ms per-voice retrigger filter. Done 2026-09-30.

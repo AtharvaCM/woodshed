@@ -183,6 +183,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     try {
       recorder = new VideoRecorder({
         highway: canvas,
+        fit: () => (session?.view === 'highway' ? 'cover' : 'contain'),
         camera,
         gameAudio: app.engine.captureNode.stream,
         mic: settings.recordMic,
@@ -240,6 +241,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
         drumSoundsOnHit: settings.drumSoundsOnHit,
         reducedMotion: settings.reducedMotion,
         laneOrder: settings.laneOrder,
+        view: settings.playView,
         renderScale: settings.renderScale,
         loop: loopBars ? barSpan(loopBars.first, loopBars.last, starts) : null,
       },
@@ -392,12 +394,22 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     refreshPractice();
   }
 
+  /** Grid ↔ highway, mid-take; remembered for the next song. */
+  function toggleView(): void {
+    if (!session) return;
+    const view = session.view === 'grid' ? 'highway' : 'grid';
+    session.setView(view);
+    app.settingsStore.update({ playView: view });
+    refreshPractice();
+  }
+
   function buildPracticeBar(): void {
     const rateEl = h('span', { class: 'rate' });
     const loopBtns = LOOP_LENGTHS.map((n) => button(String(n), () => setLoop(n), 'icon small'));
     const loopLabel = h('span', { class: 'loop-label' });
     const clearLoop = button('✕', () => setLoop(null), 'icon small ghost');
     const guideBtn = button('', () => setGuide(!guideDrums), 'icon small');
+    const viewBtn = button('', toggleView, 'icon small');
     const group = (label: string, ...items: HTMLElement[]) => h('div', { class: 'pgroup' }, h('span', { class: 'plabel' }, label), ...items);
     refreshPractice = () => {
       rateEl.textContent = `${Math.round(rate * 100)}%`;
@@ -407,6 +419,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
       clearLoop.hidden = !loopBars;
       loopBtns.forEach((b, i) => b.classList.toggle('active', !!loopBars && loopBars.last - loopBars.first + 1 === LOOP_LENGTHS[i]));
       guideBtn.textContent = `GUIDE DRUMS ${guideDrums ? 'ON' : 'OFF'}`;
+      viewBtn.textContent = session?.view === 'highway' ? 'VIEW: HIGHWAY' : 'VIEW: GRID';
       guideBtn.classList.toggle('active', guideDrums);
     };
     practiceBar.replaceChildren(
@@ -414,6 +427,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
       group('BAR', button('◀', () => stepBar(-1), 'icon small'), button('▶', () => stepBar(1), 'icon small')),
       group('LOOP', ...loopBtns, loopLabel, clearLoop),
       guideBtn,
+      viewBtn,
     );
     refreshPractice();
   }

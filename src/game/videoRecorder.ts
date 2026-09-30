@@ -3,8 +3,9 @@
  *
  * Composites, every frame, into an offscreen 16:9 canvas, side by side:
  *   1. the webcam in a full-height portrait column on the left (CAM_FRACTION of the width),
- *   2. the highway canvas at full height, centred in the remaining area (the sides are trimmed —
- *      the road itself is at most 980 CSS px wide and centred, so lanes survive any sane window),
+ *   2. the play canvas in the remaining area: the highway at full height and centred (the sides are
+ *      trimmed — the road is at most 980 CSS px wide, so lanes survive any sane window); the grid view
+ *      whole, letterboxed, because its lines run edge to edge,
  *   3. a repaint of the HUD (score, combo, judgements, song info…) — the real HUD is DOM, so it
  *      would be missing from a plain canvas capture.
  *
@@ -44,6 +45,8 @@ export interface HudSnapshot {
 
 export interface VideoRecorderOptions {
   highway: HTMLCanvasElement;
+  /** 'cover' trims the canvas' sides to fill the game area (the highway); 'contain' shows all of it (the grid). */
+  fit?: () => 'cover' | 'contain';
   /** Webcam stream (video, optionally audio). May be null: the game is still recorded. */
   camera: MediaStream | null;
   /** Game audio (AudioEngine.captureNode.stream). */
@@ -224,9 +227,10 @@ export class VideoRecorder {
     const src = this.opts.highway;
     if (!src.width || !src.height) return;
     const r = this.gameRect();
-    // Always full height; trim the sides symmetrically so the road stays centred. (On a window
-    // narrower than the game area's aspect the top/bottom are trimmed instead.)
-    const scale = Math.max(r.w / src.width, r.h / src.height);
+    // Cover: always full height, sides trimmed symmetrically so the road stays centred (on a window narrower
+    // than the game area's aspect the top/bottom are trimmed instead). Contain: all of it, letterboxed.
+    const contain = this.opts.fit?.() === 'contain';
+    const scale = contain ? Math.min(r.w / src.width, r.h / src.height) : Math.max(r.w / src.width, r.h / src.height);
     const w = src.width * scale;
     const h = src.height * scale;
     ctx.save();

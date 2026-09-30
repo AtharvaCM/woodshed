@@ -36,6 +36,14 @@ describe('SettingsStore', () => {
     expect('recordCameraId' in store.get()).toBe(false);
   });
 
+  it('play view: grid by default, highway kept when chosen, junk ignored', () => {
+    expect(DEFAULT_SETTINGS.playView).toBe('grid');
+    const load = (playView: unknown) => new SettingsStore(memoryKV({ [SETTINGS_KEY]: JSON.stringify({ playView }) })).get().playView;
+    expect(load('highway')).toBe('highway');
+    expect(load('tunnel')).toBe('grid');
+    expect(new SettingsStore(memoryKV({ [SETTINGS_KEY]: JSON.stringify({ playerName: 'OLD' }) })).get().playView).toBe('grid'); // saved before the grid existed
+  });
+
   it('a voice the saved keys predate gets its defaults, minus keys already taken', () => {
     const saved = Object.fromEntries(Object.entries(DEFAULT_KEYBOARD).filter(([v]) => v !== 'hihatPedal'));
     saved.kick = ['KeyV']; // the pedal's default
