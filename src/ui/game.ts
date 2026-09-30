@@ -183,7 +183,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     try {
       recorder = new VideoRecorder({
         highway: canvas,
-        fit: () => (session?.view === 'highway' ? 'cover' : 'contain'),
+        paintGame: (ctx, frame) => session?.renderer.paintTo?.(ctx, frame) ?? false,
         camera,
         gameAudio: app.engine.captureNode.stream,
         mic: settings.recordMic,
