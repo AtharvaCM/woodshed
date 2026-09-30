@@ -27,7 +27,14 @@ function isBinding(v: unknown): v is PadBinding {
   );
 }
 
-/** Coerce arbitrary stored data into a well-formed bindings map (unknown voices dropped, missing ones empty). */
+/** GM "Pedal Hi-Hat". */
+const PEDAL_HAT_NOTE = 44;
+
+/**
+ * Coerce arbitrary stored data into a well-formed bindings map (unknown voices dropped, missing ones empty).
+ * Maps saved before the hi-hat pedal had its own voice filed the pedal chick (44) under the closed hat;
+ * it moves to the pedal.
+ */
 export function sanitizeBindings(raw: unknown): Record<DrumVoice, PadBinding[]> {
   const out = emptyBindings();
   if (!raw || typeof raw !== 'object') return out;
@@ -36,6 +43,10 @@ export function sanitizeBindings(raw: unknown): Record<DrumVoice, PadBinding[]> 
     if (Array.isArray(list)) {
       out[v] = list.filter(isBinding).map((b) => ({ note: b.note, channel: b.channel }));
     }
+  }
+  if (!('hihatPedal' in raw)) {
+    out.hihatPedal = out.hihatClosed.filter((b) => b.note === PEDAL_HAT_NOTE);
+    out.hihatClosed = out.hihatClosed.filter((b) => b.note !== PEDAL_HAT_NOTE);
   }
   return out;
 }

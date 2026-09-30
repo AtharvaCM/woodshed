@@ -29,6 +29,7 @@ const PRIORITY: Record<DrumVoice, number> = {
   ride: 6,
   hihatClosed: 7,
   kick: 8,
+  hihatPedal: 9,
 };
 
 /** Tick tolerance for "is on the grid" checks. */
@@ -57,6 +58,7 @@ const EASY_PRIORITY: Record<DrumVoice, number> = {
   ride: 6,
   hihatClosed: 7,
   kick: 8,
+  hihatPedal: 9,
 };
 
 /** Pick the most important note (priority, then velocity, then earliest). */
@@ -138,7 +140,7 @@ function toHard(notes: ChartNote[], ppq: number): ChartNote[] {
 }
 
 /**
- * MEDIUM (from hard): hats/ride only on quarters; kick, snare and toms only on 8ths;
+ * MEDIUM (from hard): no hi-hat pedal (a foot part is hard-level coordination); hats/ride only on quarters; kick, snare and toms only on 8ths;
  * at most 4 toms per bar (the last four — fills lead into the downbeat);
  * when a crash is present on a tick only kick may accompany it.
  */
@@ -146,6 +148,7 @@ function toMedium(notes: ChartNote[], ppq: number, timeSignatures: TimeSignature
   const tol = gridTolerance(ppq);
   const eighth = ppq / 2;
   let kept = notes.filter((n) => {
+    if (n.voice === 'hihatPedal') return false;
     if (HAT_OR_RIDE.has(n.voice)) return isOnGrid(n.tick, ppq, tol);
     if (n.voice === 'crash') return true;
     return isOnGrid(n.tick, eighth, tol); // kick, snare, toms

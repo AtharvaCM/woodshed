@@ -166,6 +166,23 @@ describe('Judge', () => {
     });
   });
 
+  describe('hi-hat pedal', () => {
+    it('is judged only when the chart has a foot part', () => {
+      expect(new Judge([n(1, 'hihatClosed')], opts).judges('hihatPedal')).toBe(false);
+      expect(new Judge([n(1, 'hihatClosed')], opts).judges('hihatClosed')).toBe(true);
+      expect(new Judge([n(1, 'hihatPedal')], opts).judges('hihatPedal')).toBe(true);
+    });
+
+    it('is its own lane: a chick never takes a hand hat, a hand never takes a chick', () => {
+      const j = new Judge([n(1, 'hihatClosed'), n(1, 'hihatPedal')], { ...opts, strictVoices: false });
+      expect(j.hit('hihatPedal', 1.002)).toMatchObject({ kind: 'hit', voice: 'hihatPedal', judgement: 'perfect' });
+      expect(j.hit('hihatClosed', 1.004)).toMatchObject({ kind: 'hit', voice: 'hihatClosed', judgement: 'perfect' });
+      const lone = new Judge([n(1, 'hihatClosed')], { ...opts, strictVoices: false });
+      expect(lone.hit('hihatPedal', 1).kind).toBe('overhit');
+      expect(lone.notes[0].state).toBe('pending');
+    });
+  });
+
   it('window scale widens all windows', () => {
     const j = new Judge([n(1, 'snare')], { ...opts, windowScale: 2 });
     expect(j.hit('snare', 1.2).judgement).toBe('good'); // 200ms > default 110ms good window

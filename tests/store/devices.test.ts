@@ -51,6 +51,19 @@ describe('DeviceStore', () => {
     expect(voiceForMidi(cfg, 99, 0)).toBeNull();
   });
 
+  it('moves the pedal chick off the closed hat in maps saved before the pedal voice', () => {
+    const old = { kick: [{ note: 36, channel: -1 }], hihatClosed: [{ note: 42, channel: -1 }, { note: 22, channel: -1 }, { note: 44, channel: -1 }] };
+    const cfg = new DeviceStore(memoryKV({ [DEVICES_KEY]: JSON.stringify({ 'TD-07': { deviceName: 'TD-07', bindings: old } }) })).get('TD-07')!;
+    expect(cfg.bindings.hihatClosed.map((b) => b.note)).toEqual([42, 22]);
+    expect(cfg.bindings.hihatPedal).toEqual([{ note: 44, channel: -1 }]);
+    expect(voiceForMidi(cfg, 44, 9)).toBe('hihatPedal');
+    // a map that knows about the pedal is left as saved, even with 44 on the closed hat
+    const chosen = { ...old, hihatPedal: [] };
+    const kept = new DeviceStore(memoryKV({ [DEVICES_KEY]: JSON.stringify({ x: { bindings: chosen } }) })).get('x')!;
+    expect(kept.bindings.hihatClosed.map((b) => b.note)).toEqual([42, 22, 44]);
+    expect(kept.bindings.hihatPedal).toEqual([]);
+  });
+
   it('sanitizes corrupt storage', () => {
     const kv = memoryKV({ [DEVICES_KEY]: JSON.stringify({ x: { deviceName: 'X', bindings: { kick: [{ note: 36, channel: -1 }, 'bad'], bogus: [] } } }) });
     const cfg = new DeviceStore(kv).get('x')!;

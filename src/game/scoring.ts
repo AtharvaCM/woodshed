@@ -34,6 +34,11 @@ const OTHER_VOICE_SLACK = 0.02;
 /** Notes this close to each other count as struck together (a chord, or a slightly humanised one), never as a double. */
 const TOGETHER = 0.015;
 
+/** What a stroke is judged against: its highway lane, except that the hi-hat pedal (the left foot) is a lane of
+ * its own, so a foot chick never stands in for a hand on the hats or the other way round. */
+type JudgeLane = Lane | 'hihatPedal';
+const judgeLane = (voice: DrumVoice): JudgeLane => (voice === 'hihatPedal' ? voice : LANE_FOR_VOICE[voice]);
+
 export const BASE_NOTE_SCORE = 100;
 export const MAX_MULTIPLIER = 4;
 export const COMBO_PER_MULTIPLIER = 10;
@@ -97,18 +102,29 @@ export class Judge {
   private nearMissCount = 0;
   /** Number of judged hits on isolated notes contributing to deltaSigned. */
   private isoCount = 0;
+  /** The chart has a foot part on the hi-hat pedal. */
+  private readonly pedalCharted: boolean;
 
   constructor(notes: ChartNote[], opts: JudgeOptions) {
     this.opts = opts;
     this.windows = opts.windows ?? hitWindowsFor(opts.difficulty, opts.windowScale ?? 1);
     this.notes = notes.map((n, index) => ({ ...n, index, state: 'pending' as const, isolated: true }));
+    this.pedalCharted = notes.some((n) => n.voice === 'hihatPedal');
     for (let i = 0; i < this.notes.length; i++) {
       const a = this.notes[i];
       for (let j = i + 1; j < this.notes.length && this.notes[j].time - a.time < ISOLATION_RANGE; j++) {
         const b = this.notes[j];
-        if (LANE_FOR_VOICE[a.voice] === LANE_FOR_VOICE[b.voice]) a.isolated = b.isolated = false;
+        if (judgeLane(a.voice) === judgeLane(b.voice)) a.isolated = b.isolated = false;
       }
     }
+  }
+
+  /**
+   * Whether hits on `voice` are judged at all. The hi-hat pedal only counts when the chart has a foot part;
+   * otherwise a foot keeping time on the hats is the drummer's business, not an overhit.
+   */
+  judges(voice: DrumVoice): boolean {
+    return voice !== 'hihatPedal' || this.pedalCharted;
   }
 
   onEvent(fn: (ev: JudgeEvent) => void): () => void {
@@ -166,7 +182,7 @@ export class Judge {
    * 16th run at 108 BPM into "good, 136 ms early" (the good window is wider than a 16th).
    */
   hit(voice: DrumVoice, t: number): JudgeEvent {
-    const lane = LANE_FOR_VOICE[voice];
+    const lane = judgeLane(voice);
     const win = this.windows.good;
     let best: TrackedNote | null = null;
     let bestScore = Infinity;
@@ -180,7 +196,7 @@ export class Judge {
     for (; i < this.notes.length; i++) {
       const n = this.notes[i];
       if (n.time - t > win) break;
-      if (t - n.time > win || LANE_FOR_VOICE[n.voice] !== lane) continue;
+      if (t - n.time > win || judgeLane(n.voice) !== lane) continue;
       const exact = n.voice === voice;
       const dist = Math.abs(n.time - t);
       if (n.state === 'pending' && (exact || !this.opts.strictVoices)) {
@@ -234,13 +250,13 @@ export class Judge {
   }
 
   /** Signed distance (t - noteTime) to the nearest un-hit note on `lane` within NEAR_MISS_RANGE, else NaN. */
-  private nearestDelta(lane: Lane, t: number): number {
+  private nearestDelta(lane: JudgeLane, t: number): number {
     let best = NaN;
     for (let i = 0; i < this.notes.length; i++) {
       const n = this.notes[i];
       if (n.time < t - NEAR_MISS_RANGE) continue;
       if (n.time > t + NEAR_MISS_RANGE) break;
-      if (n.state === 'hit' || !n.isolated || LANE_FOR_VOICE[n.voice] !== lane) continue;
+      if (n.state === 'hit' || !n.isolated || judgeLane(n.voice) !== lane) continue;
       const d = t - n.time;
       if (Number.isNaN(best) || Math.abs(d) < Math.abs(best)) best = d;
     }

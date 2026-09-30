@@ -13,7 +13,7 @@ import { DRUM_VOICES } from '@/types';
 
 /**
  * GM percussion note → game voice. Alternates (side stick, clap, china, splash,
- * ride bell, pedal hat …) are folded onto the closest game voice.
+ * ride bell …) are folded onto the closest game voice.
  */
 const NOTE_TO_VOICE: ReadonlyMap<number, DrumVoice> = new Map<number, DrumVoice>([
   [35, 'kick'], // Acoustic Bass Drum
@@ -29,7 +29,7 @@ const NOTE_TO_VOICE: ReadonlyMap<number, DrumVoice> = new Map<number, DrumVoice>
   [48, 'tomHigh'], // Hi-Mid Tom
   [50, 'tomHigh'], // High Tom
   [42, 'hihatClosed'], // Closed Hi-Hat
-  [44, 'hihatClosed'], // Pedal Hi-Hat
+  [44, 'hihatPedal'], // Pedal Hi-Hat (the left foot)
   [46, 'hihatOpen'], // Open Hi-Hat
   // Roland V-Drums hi-hat edge zones — unassigned in GM, sent by the TD-07/17/27 at their factory map.
   [22, 'hihatClosed'], // Closed Hi-Hat edge (Roland)
@@ -64,13 +64,14 @@ export const CANONICAL_NOTE: Readonly<Record<DrumVoice, number>> = {
   tomHigh: 50,
   hihatClosed: 42,
   hihatOpen: 46,
+  hihatPedal: 44,
   ride: 51,
   crash: 49,
 };
 
 /**
  * Canonical GM export note for a voice (kick 36, snare 38, tomLow 43, tomMid 47,
- * tomHigh 50, hihatClosed 42, hihatOpen 46, ride 51, crash 49).
+ * tomHigh 50, hihatClosed 42, hihatOpen 46, hihatPedal 44, ride 51, crash 49).
  */
 export function noteForVoice(voice: DrumVoice): number {
   return CANONICAL_NOTE[voice];
@@ -173,9 +174,8 @@ export function makeBindings(
  * Roland V-Drums modules (TD-07 / TD-17 / TD-27 …) at their factory MIDI note map
  * (Roland KB "TD-07KV: Default MIDI Note Map"). The module chooses the open or closed
  * hi-hat note itself from the pedal position (CC#4), so the open/closed split works
- * without reading controllers. The pedal "chick" (44) counts as a closed hat: struck with a
- * hand hat, the retrigger filter drops one of the two; elsewhere it is an overhit, so unbind it
- * in Pad Setup if foot-chicks get in the way. Tom rims 50/47 exist on TD-17/27 kits and
+ * without reading controllers. The pedal "chick" (44) is its own voice, the left foot, and
+ * only counts when a chart has a foot part. Tom rims 50/47 exist on TD-17/27 kits and
  * on the TD-07KX/KVX; the DMK/KV toms are single-zone. The ride bell (53) needs a 3-zone
  * ride (KVX). Tom 3 rim (58) is left out because GM calls 58 Vibraslap.
  */
@@ -189,7 +189,8 @@ export const ROLAND_TD_PRESET: DevicePreset = {
     tomHigh: [48, 50], // tom 1 head, rim
     tomMid: [45, 47], // tom 2 head, rim
     tomLow: [43], // tom 3 head
-    hihatClosed: [42, 22, 44], // bow, edge, pedal
+    hihatClosed: [42, 22], // bow, edge
+    hihatPedal: [44], // foot chick
     hihatOpen: [46, 26], // bow, edge
     ride: [51, 59, 53], // bow, edge, bell
     crash: [49, 55, 57, 52], // crash 1 bow/edge, crash 2 bow/edge
@@ -207,7 +208,8 @@ export const GM_PRESET: DevicePreset = {
     tomHigh: [50, 48],
     tomMid: [47, 45],
     tomLow: [43, 41],
-    hihatClosed: [42, 44],
+    hihatClosed: [42],
+    hihatPedal: [44],
     hihatOpen: [46],
     ride: [51, 59, 53],
     crash: [49, 57, 52, 55],
@@ -225,7 +227,8 @@ export const FGDP_PRESET: DevicePreset = {
     tomHigh: [48, 50],
     tomMid: [45, 47],
     tomLow: [41, 43],
-    hihatClosed: [42, 44],
+    hihatClosed: [42],
+    hihatPedal: [44],
     hihatOpen: [46],
     ride: [51, 53],
     crash: [49, 57],
@@ -245,6 +248,7 @@ export const MPC_PRESET: DevicePreset = {
     tomLow: [41],
     hihatClosed: [42],
     hihatOpen: [46],
+    hihatPedal: [44],
     ride: [51],
     crash: [49],
   }),

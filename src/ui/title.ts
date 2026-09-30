@@ -1,6 +1,6 @@
 import type { App, Screen } from '@/app';
 import { typingInField } from '@/app';
-import { DRUM_VOICES, VOICE_LABELS, type Difficulty, type SongListEntry } from '@/types';
+import { DRUM_VOICES, OPTIONAL_VOICES, VOICE_LABELS, type Difficulty, type SongListEntry } from '@/types';
 import { h, button, clear, fmtAgo, pct, toast } from './dom';
 import { attachPadNav, focusList } from './padNav';
 
@@ -34,12 +34,13 @@ export function titleScreen(app: App): Screen {
         checks.appendChild(checkRow('ok', 'KIT', `${name}${ports.length > 1 ? ` (+${ports.length - 1} more)` : ''}`));
         // Pad map for the active device
         const cfg = app.devices.get(name);
-        const unmapped = DRUM_VOICES.filter((v) => !(cfg?.bindings[v] ?? []).length);
+        const required = DRUM_VOICES.filter((v) => !OPTIONAL_VOICES.has(v));
+        const unmapped = required.filter((v) => !(cfg?.bindings[v] ?? []).length);
         const pads = cfg ? Object.values(cfg.bindings).flat().length : 0;
         checks.appendChild(
           unmapped.length
             ? checkRow('warn', 'PADS', `${unmapped.map((v) => VOICE_LABELS[v]).join(', ')} not mapped`, { label: 'PAD SETUP', run: () => go('wizard') })
-            : checkRow('ok', 'PADS', `${pads} pads mapped to all 9 drums`, { label: 'EDIT', run: () => go('wizard') }),
+            : checkRow('ok', 'PADS', `${pads} pads mapped to all ${required.length} drums`, { label: 'EDIT', run: () => go('wizard') }),
         );
       }
     }

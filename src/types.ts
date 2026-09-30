@@ -15,6 +15,7 @@ export type DrumVoice =
   | 'tomLow'
   | 'hihatClosed'
   | 'hihatOpen'
+  | 'hihatPedal'
   | 'ride'
   | 'crash';
 
@@ -26,6 +27,7 @@ export const DRUM_VOICES: readonly DrumVoice[] = [
   'tomLow',
   'hihatClosed',
   'hihatOpen',
+  'hihatPedal',
   'ride',
   'crash',
 ] as const;
@@ -38,9 +40,16 @@ export const VOICE_LABELS: Record<DrumVoice, string> = {
   tomLow: 'Low Tom',
   hihatClosed: 'Hi-Hat (closed)',
   hihatOpen: 'Hi-Hat (open)',
+  hihatPedal: 'Hi-Hat (pedal)',
   ride: 'Ride',
   crash: 'Crash',
 };
+
+/**
+ * Voices a kit may leave unmapped. The hi-hat pedal is the left foot: a chart only asks for it when it has a
+ * foot part, and a finger-drum controller has nothing to bind it to.
+ */
+export const OPTIONAL_VOICES: ReadonlySet<DrumVoice> = new Set<DrumVoice>(['hihatPedal']);
 
 /** Visual lanes on the note highway. Crash is a full-width horizontal bar. */
 export type Lane = 'hihat' | 'snare' | 'kick' | 'toms' | 'ride' | 'crash';
@@ -56,6 +65,7 @@ export const LANE_FOR_VOICE: Record<DrumVoice, Lane> = {
   tomLow: 'toms',
   hihatClosed: 'hihat',
   hihatOpen: 'hihat',
+  hihatPedal: 'hihat', // drawn in the hi-hat lane, but judged on its own (see Judge)
   ride: 'ride',
   crash: 'crash',
 };
@@ -303,6 +313,7 @@ export const DEFAULT_KEYBOARD: Record<DrumVoice, string[]> = {
   tomLow: ['KeyK'],
   hihatClosed: ['KeyD'],
   hihatOpen: ['KeyS'],
+  hihatPedal: ['KeyV'],
   ride: ['KeyL'],
   crash: ['KeyA', 'Semicolon'],
 };

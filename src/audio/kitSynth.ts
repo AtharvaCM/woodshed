@@ -17,6 +17,7 @@ export const VOICE_DURATIONS: Record<DrumVoice, number> = {
   tomLow: 0.7,
   hihatClosed: 0.18,
   hihatOpen: 0.7,
+  hihatPedal: 0.12,
   ride: 1.8,
   crash: 2.8,
 };
@@ -200,6 +201,20 @@ function hatRecipe(decay: number, dur: number, noiseDecay: number): Recipe {
   };
 }
 
+/** Foot chick: the two cymbals clapped shut. Shorter, darker and softer than a stick on the closed hat. */
+const hihatPedal: Recipe = (ctx, out) => {
+  const dur = VOICE_DURATIONS.hihatPedal;
+  const stack = metallicStack(ctx, 2, dur);
+  const bp = filter(ctx, 'bandpass', 6500, 1.2);
+  const e = env(ctx, 0.6, 0.004, 0.035);
+  chain(stack, bp, e, out);
+  const n = noiseSource(ctx, dur, 43);
+  const nbp = filter(ctx, 'bandpass', 3000, 0.8);
+  const ne = env(ctx, 0.35, 0.002, 0.02);
+  chain(n, nbp, ne, out);
+  n.start(0);
+};
+
 const ride: Recipe = (ctx, out) => {
   const dur = VOICE_DURATIONS.ride;
   const stack = metallicStack(ctx, 1.4, dur);
@@ -262,6 +277,7 @@ export const RECIPES: Record<DrumVoice, Recipe> = {
   tomLow: tomRecipe(160, 100, 0.6, VOICE_DURATIONS.tomLow),
   hihatClosed: hatRecipe(0.06, VOICE_DURATIONS.hihatClosed, 0.03),
   hihatOpen: hatRecipe(0.5, VOICE_DURATIONS.hihatOpen, 0.25),
+  hihatPedal,
   ride,
   crash,
 };

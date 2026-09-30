@@ -94,10 +94,13 @@ A chart is a standard MIDI file (format 0 or 1). The game reads **note-on events
 | Low tom | 41, 43 |
 | Mid tom | 45, 47 |
 | High tom | 48, 50 |
-| Hi-hat (closed) | 42, 44 (pedal) |
-| Hi-hat (open) | 46 |
+| Hi-hat (closed) | 42 (22: Roland edge) |
+| Hi-hat (open) | 46 (26: Roland edge) |
+| Hi-hat pedal (foot) | 44 |
 | Ride | 51, 53 (bell), 59 |
 | Crash | 49, 52 (china), 55 (splash), 57 |
+
+44 is the left foot, not a quiet hand hat: a chart with 44s asks for foot chicks, drawn at the left edge of the hi-hat lane and judged only in charts that have them (never on easy or medium). Drum transcribers often write quiet hand hats as 44; `scripts/transcription-to-song.py` folds them into 42.
 
 Notes on other numbers are ignored, so you can leave percussion you don't want charted in the file. Tempo changes and time signatures in the MIDI file are honoured; if the file has no tempo events, `bpm` from `song.json` is used.
 
@@ -141,7 +144,7 @@ By default the game plays its built-in kit when you hit a pad. To make a song so
 }
 ```
 
-Voice keys are exactly: `kick`, `snare`, `tomHigh`, `tomMid`, `tomLow`, `hihatClosed`, `hihatOpen`, `ride`, `crash`. Samples can be `wav`, `mp3`, `flac`, `aac`, `m4a` or `ogg`; short, trimmed, mono or stereo. Use `sampleGain` to balance the samples against the mix (`0.7` = quieter, `1.4` = louder).
+Voice keys are exactly: `kick`, `snare`, `tomHigh`, `tomMid`, `tomLow`, `hihatClosed`, `hihatOpen`, `hihatPedal`, `ride`, `crash`. Samples can be `wav`, `mp3`, `flac`, `aac`, `m4a` or `ogg`; short, trimmed, mono or stereo. Use `sampleGain` to balance the samples against the mix (`0.7` = quieter, `1.4` = louder).
 
 ## Artwork, preview and accent
 

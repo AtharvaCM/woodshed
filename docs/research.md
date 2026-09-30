@@ -48,7 +48,7 @@ Port name `TD-07`, channel 10, every hit stamped by CoreMIDI (skew 0 to -1 ms, n
 | Hat bow, pedal down | 42 | |
 | Hat bow, pedal up | 46 | |
 | Hat edge, pedal up | 26 | Roland edge note; needs the 26 → open-hat entry in gm.ts |
-| Foot chick | 44 | velocity 16–87 |
+| Foot chick | 44 | velocity 16–87. Its own voice (`hihatPedal`) since 2026-09-30 |
 | Crash edge | 55 **and** 49, 50 ms apart | one stroke sent edge + bow; both map to crash, but the second reads as an overhit in game. Dropped since 2026-09-30 by the input hub's 60 ms per-voice retrigger filter (`src/input/retrigger.ts`; 40 ms would miss this pair) |
 | Kick, either beater | 36 | one stroke occasionally followed by a low-velocity (v18–32) ghost 40–60 ms later = beater bounce. The retrigger filter drops it; on the module, raise `SETUP > PAD > KICK > MaskTime` |
 | Double kick, 8 hits | 36 ×8 at ~270 ms spacing | evenness data usable straight from timestamps |

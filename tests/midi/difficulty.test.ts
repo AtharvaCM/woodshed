@@ -112,6 +112,17 @@ describe('deriveDifficulty', () => {
     expect(crashTicks.size).toBe(9);
   });
 
+  it('the hi-hat pedal survives hard and goes on medium (a foot part is hard-level coordination)', () => {
+    const notes: ChartNote[] = [
+      { tick: 0, voice: 'kick', velocity: 1 },
+      { tick: ppq, voice: 'hihatPedal', velocity: 0.8 },
+      { tick: 3 * ppq, voice: 'hihatPedal', velocity: 0.8 },
+    ].map((n) => ({ ...n, voice: n.voice as DrumVoice, time: ticksToSeconds(n.tick, map, ppq) }));
+    const chart: Chart = { ppq, tempoMap: map, timeSignatures: [{ tick: 0, numerator: 4, denominator: 4 }], notes, duration: 3 };
+    expect(deriveDifficulty(chart, 'hard').notes.filter((n) => n.voice === 'hihatPedal').length).toBe(2);
+    expect(deriveDifficulty(chart, 'medium').notes.map((n) => n.voice)).toEqual(['kick']);
+  });
+
   it('easy: kick/snare on quarters, hats on beats 1 & 3, toms only before a crash, one non-kick per beat', () => {
     const easy = deriveDifficulty(source, 'easy');
     expect(easy.notes.filter((n) => n.voice === 'kick' || n.voice === 'snare').every((n) => n.tick % ppq === 0)).toBe(true);
