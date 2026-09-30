@@ -93,6 +93,30 @@ Toms 48/45/43, ride bow 51, ride edge 59, crash bow 49 confirmed earlier in the 
 - **Hats are 16ths**, not 8ths (≈16 per bar, ~1,987 in the song). Songsterr's 8th-note hat was wrong.
 - **Kick pattern** (16th slots, 0 = beat 1): 0, 3, 6, 7, 10, 14 → beat 1, "a" of 1, "&" and "a" of 2, "&" of 3, "&" of 4. **Snare** on 2 and 4 (slots 4, 12) with a frequent ghost on the "a" of 1 (slot 3).
 - Bass loops Am → G → F → F (4-bar cycle from bar 10). Drums drop out completely for two bars at song bars 21–22 and thin to kick-only at bars 77–80 (interlude).
+- **Form, bar by bar** (2026-09-30, from the stems: bass root and chord per half bar, vocal-stem level per bar). The E major chord only ever appears as the first bar of a 6-bar E–Dm–G–G–F–G cycle, which marks the three lifts; verses 2 and 3 are the only Am–F–Dm–G cycles; bars 105–112 are the only bars with no bass.
+
+  | Bars | Section | Evidence |
+  |---|---|---|
+  | 1–8 | Intro | guitar riff (1–5), then a sung line (6–8); no bass, no drums |
+  | 9–22 | Hook 1 | bass and drums in at 9; Am–G–F–F ×3, bar 22 drums tacet |
+  | 23–30 | Verse 1 | Am–G–F–F ×2, lead vocal |
+  | 31–38 | Pre-hook 1 | Am–G–F–F ×2, crash on 31 |
+  | 39–44 | Lift 1 | E–Dm–G–G–F–G |
+  | 45–52 | Hook 2 | Am–G–F–G, Am–G–F–F; crash every 4 bars, loudest vocal |
+  | 53–60 | Riff | hook chords, no lead vocal until 57 |
+  | 61–70 | Interlude | Am vamp with no vocal (61–64), then F–G… under the flute |
+  | 71–78 | Verse 2 | Am–F–Dm–G ×2 |
+  | 79–86 | Pre-hook 2 | Am–G–F–G ×2, crashes on 79 and 83 |
+  | 87–92 | Lift 2 | E–Dm–G–G–F–G |
+  | 93–104 | Hook 3 | Am–G–F–G, then Am–G–F–F ×2 |
+  | 105–112 | Breakdown | no bass, Am drone under the vocal |
+  | 113–117 | Turnaround | Am–G–F–F–F, quieter vocal |
+  | 118–125 | Verse 3 | Am–F–Dm–G ×2 |
+  | 126–133 | Pre-hook 3 | Am–G–F–G ×2, crashes on 126 and 130 |
+  | 134–139 | Lift 3 | E–Dm–G–G–F–G |
+  | 140–152 | Hook 4 | Am–G–F–G, then Am–G–F–F ×2 to the end |
+
+  Names are structural (from harmony, vocals and drums), not from the lyrics; rename by ear in Studio if a lyric line reads better. Kept in `audio/labon-ko-sections.json` and written into song.json with `transcription-to-song.py --sections`.
 - ADTOF alone gives 5 classes, flat velocity 100, 8 crashes, no open hats, no ride. drum2midi adds those; pending.
 - **ADTOF onsets lead the real transients**: kick +14 ms, snare +26 ms, hats +32 ms (median, vs band-limited onset detection on the stem). The song offset was raised 0.511 → 0.539 to compensate. Stems from demucs-mlx are sample-aligned with the original (lag 0.2 ms).
 - Pipeline timing on the M4 (base): demucs-mlx htdemucs_ft 6 min for 5:41 (much slower than the M4 Max benchmark); adtof 13 s; song folder + zip instant.
