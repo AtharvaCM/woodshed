@@ -115,8 +115,8 @@ export class DrumKit {
 
     if (voice === 'hihatOpen') {
       this.openHats.push(hit);
-    } else if (voice === 'hihatClosed') {
-      this.chokeOpenHats(t);
+    } else if (voice === 'hihatClosed' || voice === 'hihatPedal') {
+      this.chokeOpenHats(t); // a stick on the closed hat, or the foot closing it
     }
 
     return {

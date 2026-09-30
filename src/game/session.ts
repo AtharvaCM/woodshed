@@ -229,7 +229,7 @@ export class GameSession {
     const pos = this.transport.positionAtPerfTime(hit.timeStamp);
     const t = this.judgeTime(pos - this.cfg.meta.offset);
     this.renderer.drumPulse(hit.voice, hit.velocity);
-    if (t < -0.5) return;
+    if (t < -0.5 || !this.judge.judges(hit.voice)) return;
     this.judge.hit(hit.voice, t);
   }
 
@@ -335,4 +335,4 @@ export function computeBeats(chart: Chart, untilSeconds: number): BeatMark[] {
   return out;
 }
 
-export const VOICE_ORDER_FOR_UI: DrumVoice[] = ['kick', 'snare', 'hihatClosed', 'hihatOpen', 'tomHigh', 'tomMid', 'tomLow', 'ride', 'crash'];
+export const VOICE_ORDER_FOR_UI: DrumVoice[] = ['kick', 'snare', 'hihatClosed', 'hihatOpen', 'hihatPedal', 'tomHigh', 'tomMid', 'tomLow', 'ride', 'crash'];

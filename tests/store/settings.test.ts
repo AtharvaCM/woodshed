@@ -36,6 +36,16 @@ describe('SettingsStore', () => {
     expect('recordCameraId' in store.get()).toBe(false);
   });
 
+  it('a voice the saved keys predate gets its defaults, minus keys already taken', () => {
+    const saved = Object.fromEntries(Object.entries(DEFAULT_KEYBOARD).filter(([v]) => v !== 'hihatPedal'));
+    saved.kick = ['KeyV']; // the pedal's default
+    const s = new SettingsStore(memoryKV({ [SETTINGS_KEY]: JSON.stringify({ keyboard: saved }) })).get();
+    expect(s.keyboard.kick).toEqual(['KeyV']);
+    expect(s.keyboard.hihatPedal).toEqual([]);
+    const fresh = new SettingsStore(memoryKV({ [SETTINGS_KEY]: JSON.stringify({ keyboard: { ...saved, kick: ['Space'] } }) })).get();
+    expect(fresh.keyboard.hihatPedal).toEqual(DEFAULT_KEYBOARD.hihatPedal);
+  });
+
   it('update persists, deep-merges keyboard, and notifies subscribers', () => {
     const kv = memoryKV();
     const store = new SettingsStore(kv);

@@ -106,7 +106,7 @@ try {
   await sleep(2500);
   const songs = await evaluate(`Array.from(document.querySelectorAll('.songcard .title')).map(e => e.textContent)`);
   assert(songs.length >= 2, `song list shows bundled songs (${songs.join(', ')})`);
-  assert((await evaluate(`window.dk.kit.loaded.size`)) === 9, 'default drum kit synthesized (9 voices)');
+  assert((await evaluate(`window.dk.kit.loaded.size`)) === 10, 'default drum kit synthesized (10 voices)');
   await shot('02-songs.png');
   await evaluate(`Array.from(document.querySelectorAll('.songcard')).find(c => c.textContent.includes('Back Pocket')).click()`);
   await sleep(600);

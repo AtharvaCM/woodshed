@@ -3,7 +3,10 @@
 
 Chart tick 0 is placed at `--offset` seconds of audio (the song's first downbeat), and a constant
 tempo map at `--bpm` is written so bar lines in the editor land on the music. Notes before the
-offset are dropped. GM drum notes only; anything else is ignored.
+offset are dropped. GM drum notes only; anything else is ignored. Pedal hi-hat (44) is written as closed
+hi-hat (42) unless --keep-pedal-hats: in WOODSHED 44 is the drummer's left foot, and transcribers use it for
+quiet hand hats (drum2midi put 190 in Labon Ko, most filling gaps in the 16th hat run). Two notes that land on
+the same drum at the same instant after folding and snapping are merged (the louder one stays).
 
   .venv/bin/python scripts/transcription-to-song.py \
       --midi audio/labon-ko-adtof.mid --bpm 108 --offset 0.511 \
@@ -34,6 +37,7 @@ ap.add_argument('--accent')
 ap.add_argument('--quantize', type=int, default=0, metavar='N', help='snap note starts to the nearest 1/N note of the constant grid (16 = sixteenths). Transcribed onsets jitter 20-40 ms; the difficulty deriver only keeps notes within ~1/32 beat of the grid, so unquantized charts collapse on easy/medium')
 ap.add_argument('--max-snap', type=float, default=0.06, help='seconds; notes further than this from a grid line are left where they are')
 ap.add_argument('--fold-open-hats', action='store_true', help='write open hi-hat (46) as closed (42); transcribers often call every accented 16th "open"')
+ap.add_argument('--keep-pedal-hats', action='store_true', help='keep pedal hi-hat (44) as a foot part instead of writing it as closed hat (42); only for a transcription you trust to tell the foot from quiet hand hats')
 ap.add_argument('--out', required=True)
 a = ap.parse_args()
 
@@ -46,6 +50,8 @@ drums = pretty_midi.Instrument(program=0, is_drum=True, name='WOODSHED')
 beat = 60 / a.bpm
 snapped = 0
 snap_err = []
+folded = {46: 0, 44: 0}
+written = {}  # (pitch, start rounded to 0.1 ms) -> Note, to merge notes that land on the same drum at the same instant
 for n in notes:
     t = n.start - a.offset
     if t < 0:
@@ -57,8 +63,17 @@ for n in notes:
             snap_err.append(g - t)
             t = g
             snapped += 1
-    pitch = 42 if (a.fold_open_hats and n.pitch == 46) else n.pitch
-    drums.notes.append(pretty_midi.Note(velocity=max(1, min(127, int(n.velocity))), pitch=pitch, start=t, end=t + beat / 8))
+    pitch = n.pitch
+    if (pitch == 46 and a.fold_open_hats) or (pitch == 44 and not a.keep_pedal_hats):
+        folded[pitch] += 1
+        pitch = 42
+    vel = max(1, min(127, int(n.velocity)))
+    key = (pitch, round(t, 4))
+    if key in written:
+        written[key].velocity = max(written[key].velocity, vel)
+        continue
+    written[key] = pretty_midi.Note(velocity=vel, pitch=pitch, start=t, end=t + beat / 8)
+    drums.notes.append(written[key])
 out.instruments.append(drums)
 out.time_signature_changes.append(pretty_midi.TimeSignature(4, 4, 0))
 
@@ -87,7 +102,12 @@ try:
     import librosa
     meta['length'] = round(float(librosa.get_duration(path=a.audio)), 2)
 except Exception:
-    pass
+    try:  # libsndfile cannot open m4a/aac; ffprobe can
+        import subprocess
+        probe = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', a.audio], capture_output=True, text=True, check=True)
+        meta['length'] = round(float(probe.stdout.strip()), 2)
+    except Exception:
+        pass
 if a.preview_start is not None:
     meta['preview'] = {'start': a.preview_start, 'length': 20}
 with open(os.path.join(a.out, 'song.json'), 'w') as f:
@@ -98,7 +118,8 @@ with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
     for f in sorted(os.listdir(a.out)):
         z.write(os.path.join(a.out, f), f)
 print(f"{len(drums.notes)} notes written ({dropped} before offset dropped); folder {a.out}; zip {zip_path}")
+print(f"folded into closed hat (42): {folded[46]} open (46), {folded[44]} pedal (44); same-drum duplicates merged: {len(notes) - dropped - len(drums.notes)}")
 if a.quantize:
     import statistics
-    print(f"quantized to 1/{a.quantize}: {snapped} snapped, mean shift {statistics.mean(snap_err)*1000:+.1f} ms, max |shift| {max(abs(x) for x in snap_err)*1000:.1f} ms, {len(drums.notes)-snapped} left unsnapped (> {a.max_snap*1000:.0f} ms off grid)")
+    print(f"quantized to 1/{a.quantize}: {snapped} snapped, mean shift {statistics.mean(snap_err)*1000:+.1f} ms, max |shift| {max(abs(x) for x in snap_err)*1000:.1f} ms, {len(notes)-dropped-snapped} left unsnapped (> {a.max_snap*1000:.0f} ms off grid)")
 print(json.dumps(meta, indent=2, ensure_ascii=False))

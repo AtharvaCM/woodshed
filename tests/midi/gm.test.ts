@@ -11,7 +11,7 @@ describe('gm mapping', () => {
     expect(voiceForNote(41)).toBe('tomLow');
     expect(voiceForNote(45)).toBe('tomMid');
     expect(voiceForNote(50)).toBe('tomHigh');
-    expect(voiceForNote(44)).toBe('hihatClosed');
+    expect(voiceForNote(44)).toBe('hihatPedal'); // the left foot, never a hand hat
     expect(voiceForNote(46)).toBe('hihatOpen');
     expect(voiceForNote(53)).toBe('ride');
     expect(voiceForNote(55)).toBe('crash');
@@ -48,13 +48,14 @@ describe('gm mapping', () => {
     expect(findPreset('TD-17 MIDI 1').id).toBe('roland-td');
     expect(findPreset('Roland TD-27').id).toBe('roland-td');
     expect(findPreset('TD-50X MIDI 1').id).toBe('roland-td');
-    expect(findPreset('TD-07').bindings.hihatClosed.map((b) => b.note)).toEqual([42, 22, 44]);
+    expect(findPreset('TD-07').bindings.hihatClosed.map((b) => b.note)).toEqual([42, 22]);
+    expect(findPreset('TD-07').bindings.hihatPedal.map((b) => b.note)).toEqual([44]);
     expect(findPreset('TD-07').bindings.hihatOpen.map((b) => b.note)).toEqual([46, 26]);
     expect(findPreset('TD-07').bindings.crash.map((b) => b.note)).toEqual([49, 55, 57, 52]);
     expect(findPreset('FGDP-50').id).toBe('fgdp');
     expect(findPreset('Akai MPD218').id).toBe('mpc');
     expect(findPreset('Launchpad X LPX MIDI').id).toBe('mpc');
     expect(findPreset('Some Keyboard').id).toBe('gm');
-    expect(findPreset('fgdp-30 Port 1').bindings.hihatClosed.map((b) => b.note)).toEqual([42, 44]);
+    expect(findPreset('fgdp-30 Port 1').bindings.hihatClosed.map((b) => b.note)).toEqual([42]);
   });
 });

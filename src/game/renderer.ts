@@ -18,6 +18,7 @@ export const VOICE_COLORS: Record<DrumVoice, string> = {
   tomLow: '#9d6bff',
   hihatClosed: '#ffe600',
   hihatOpen: '#fff7a8',
+  hihatPedal: '#ffae33', // a foot, so in the kick's orange family
   ride: '#8dff5a',
   crash: '#2b8cff',
 };
@@ -601,7 +602,7 @@ export class HighwayRenderer {
   /** Halo for a note voice at strike-line size and full velocity; callers scale it by distance and velocity. */
   private noteHalo(voice: DrumVoice, color: string): { c: HTMLCanvasElement; w: number; h: number } {
     const laneW = this.nearW / this.laneOrder.length;
-    const rx = laneW * (voice === 'kick' ? 0.44 : voice.startsWith('tom') ? 0.2 : 0.3) * 1.05;
+    const rx = laneW * noteWidth(voice) * 1.05;
     const ry = rx * 0.45;
     switch (voice) {
       case 'kick':
@@ -621,6 +622,8 @@ export class HighwayRenderer {
           c.lineTo(-rx, 0);
           c.closePath();
         });
+      case 'hihatPedal':
+        return this.halo('hhp', rx * 2, rx * 1.8, 14, color, (c) => chevron(c, 0, 0, rx, rx));
       case 'hihatOpen': {
         const gap = ry * 0.34;
         return this.halo('hho', rx * 2, (ry * 1.3 + gap) * 2, 14, color, (c) => {
@@ -715,8 +718,10 @@ export class HighwayRenderer {
     // toms get three sub-positions within their lane
     if (voice === 'tomHigh') nearX -= (this.nearW / this.laneOrder.length) * 0.27;
     if (voice === 'tomLow') nearX += (this.nearW / this.laneOrder.length) * 0.27;
+    // the foot sits at the lane's left edge, clear of a hand stroke on the same beat
+    if (voice === 'hihatPedal') nearX -= (this.nearW / this.laneOrder.length) * 0.4;
     const x = this.xAt(nearX, z);
-    const rx = laneW * (voice === 'kick' ? 0.44 : voice.startsWith('tom') ? 0.2 : 0.3) * (0.85 + velocity * 0.2);
+    const rx = laneW * noteWidth(voice) * (0.85 + velocity * 0.2);
     const ry = rx * 0.45;
     if (glow) {
       const spr = this.noteHalo(voice, color);
@@ -793,6 +798,14 @@ export class HighwayRenderer {
         ctx.beginPath();
         ctx.moveTo(x - rx * 0.72, y);
         ctx.lineTo(x + rx * 0.72, y);
+        ctx.stroke();
+        break;
+      }
+      case 'hihatPedal': {
+        // a downward chevron, as tall as it is wide: the foot pressing the pedal
+        chevron(ctx, x, y, rx, rx);
+        ctx.lineWidth = Math.max(1, scale);
+        ctx.fill();
         ctx.stroke();
         break;
       }
@@ -1137,6 +1150,23 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
   ctx.lineTo(x, y + rr);
   ctx.quadraticCurveTo(x, y, x + rr, y);
+  ctx.closePath();
+}
+
+/** Half-width of a note glyph as a fraction of its lane. */
+function noteWidth(voice: DrumVoice): number {
+  return voice === 'kick' ? 0.44 : voice === 'hihatPedal' ? 0.09 : voice.startsWith('tom') ? 0.2 : 0.3;
+}
+
+/** A thick downward chevron (the hi-hat pedal glyph), `rx` wide and `ry` tall either side of (x, y). */
+function chevron(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number): void {
+  ctx.beginPath();
+  ctx.moveTo(x - rx, y - ry * 0.8);
+  ctx.lineTo(x - rx * 0.45, y - ry * 0.8);
+  ctx.lineTo(x, y + ry * 0.05);
+  ctx.lineTo(x + rx * 0.45, y - ry * 0.8);
+  ctx.lineTo(x + rx, y - ry * 0.8);
+  ctx.lineTo(x, y + ry * 0.9);
   ctx.closePath();
 }
 

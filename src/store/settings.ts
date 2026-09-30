@@ -7,14 +7,15 @@ export const SETTINGS_KEY = 'dk.settings.v1';
 
 type Listener = (s: Settings) => void;
 
+/** Saved key bindings over the defaults. A voice the save predates gets its default keys, minus any already taken. */
 function mergeKeyboard(raw: unknown): Record<DrumVoice, string[]> {
   const out = {} as Record<DrumVoice, string[]>;
   for (const v of DRUM_VOICES) out[v] = [...DEFAULT_KEYBOARD[v]];
   if (raw && typeof raw === 'object') {
-    for (const v of DRUM_VOICES) {
-      const list = (raw as Record<string, unknown>)[v];
-      if (Array.isArray(list)) out[v] = list.filter((k): k is string => typeof k === 'string');
-    }
+    const saved = DRUM_VOICES.filter((v) => Array.isArray((raw as Record<string, unknown>)[v]));
+    for (const v of saved) out[v] = ((raw as Record<string, unknown>)[v] as unknown[]).filter((k): k is string => typeof k === 'string');
+    const taken = new Set(saved.flatMap((v) => out[v]));
+    if (saved.length) for (const v of DRUM_VOICES) if (!saved.includes(v)) out[v] = out[v].filter((k) => !taken.has(k));
   }
   return out;
 }
