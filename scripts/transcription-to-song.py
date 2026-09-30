@@ -6,7 +6,8 @@ tempo map at `--bpm` is written so bar lines in the editor land on the music. No
 offset are dropped. GM drum notes only; anything else is ignored. Pedal hi-hat (44) is written as closed
 hi-hat (42) unless --keep-pedal-hats: in WOODSHED 44 is the drummer's left foot, and transcribers use it for
 quiet hand hats (drum2midi put 190 in Labon Ko, most filling gaps in the 16th hat run). Two notes that land on
-the same drum at the same instant after folding and snapping are merged (the louder one stays).
+the same drum at the same instant after folding and snapping are merged (the louder one stays). --sections takes a JSON file of
+[{ "bar": 1, "name": "Intro" }, …] (bar 1 = chart tick 0) and writes it into song.json.
 
   .venv/bin/python scripts/transcription-to-song.py \
       --midi audio/labon-ko-adtof.mid --bpm 108 --offset 0.511 \
@@ -38,6 +39,7 @@ ap.add_argument('--quantize', type=int, default=0, metavar='N', help='snap note 
 ap.add_argument('--max-snap', type=float, default=0.06, help='seconds; notes further than this from a grid line are left where they are')
 ap.add_argument('--fold-open-hats', action='store_true', help='write open hi-hat (46) as closed (42); transcribers often call every accented 16th "open"')
 ap.add_argument('--keep-pedal-hats', action='store_true', help='keep pedal hi-hat (44) as a foot part instead of writing it as closed hat (42); only for a transcription you trust to tell the foot from quiet hand hats')
+ap.add_argument('--sections', metavar='JSON', help='file with [{"bar": N, "name": "..."}]: named sections for song.json (bar 1 = chart tick 0)')
 ap.add_argument('--out', required=True)
 a = ap.parse_args()
 
@@ -110,6 +112,14 @@ except Exception:
         pass
 if a.preview_start is not None:
     meta['preview'] = {'start': a.preview_start, 'length': 20}
+if a.sections:
+    by_bar = {}
+    for i, s in enumerate(json.load(open(a.sections))):
+        bar, name = s.get('bar'), str(s.get('name', '')).strip()
+        if not isinstance(bar, int) or bar < 1 or not name:
+            raise SystemExit(f'{a.sections}[{i}]: need a whole "bar" >= 1 and a "name"')
+        by_bar.setdefault(bar, name)
+    meta['sections'] = [{'bar': b, 'name': by_bar[b]} for b in sorted(by_bar)]
 with open(os.path.join(a.out, 'song.json'), 'w') as f:
     json.dump(meta, f, indent=2, ensure_ascii=False)
 
