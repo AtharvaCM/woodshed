@@ -8,6 +8,44 @@ import { topbar } from './topbar';
 import { attachPadNav, focusList } from './padNav';
 import { hitWindowsFor, starString, verdictFor } from '@/game/scoring';
 import { drawTimingHeatmap, timingSummary, type TimingHit } from '@/game/timingHeatmap';
+import type { DrumGroup, Feel, Lean } from '@/game/feel';
+
+/** A section this much ahead of or behind the take's overall lean is rushing or dragging. */
+const DRIFT_MS = 10;
+const GROUP_LABEL: Record<DrumGroup, string> = { kick: 'Kick', snare: 'Snare', hats: 'Hi-hat', toms: 'Toms', cymbals: 'Ride & crash' };
+const ms = (s: number) => Math.round(s * 1000);
+/** "12 ms ahead", "8 ms behind", or "on the beat" within 3 ms. */
+const where = (lean: number) => (Math.abs(ms(lean)) < 3 ? 'on the beat' : `${Math.abs(ms(lean))} ms ${lean < 0 ? 'ahead' : 'behind'}`);
+const leanSpan = (lean: number) => h('span', { class: `lean ${Math.abs(ms(lean)) < 3 ? '' : lean < 0 ? 'ahead' : 'behind'}` }, where(lean));
+
+/** The "Timing & feel" panel: where the take sits against the beat, drum by drum and section by section. */
+function feelPanel(feel: Feel, practice: (span: { first: number; last: number }) => void, practiceRate: number): HTMLElement | null {
+  const all = feel.all;
+  if (!all) return null;
+  const row = (label: HTMLElement | string, l: Lean, extra?: HTMLElement | null) =>
+    h('tr', null, h('td', null, label), h('td', null, leanSpan(l.lean)), h('td', null, `${ms(l.spread)} ms`), h('td', { class: 'mute' }, String(l.count)), h('td', null, extra ?? null));
+  const head = (first: string) => h('thead', null, h('tr', null, h('th', null, first), h('th', null, 'Sits'), h('th', null, 'Spread'), h('th', null, 'Hits'), h('th', null, '')));
+  const drift = (l: Lean) => {
+    const d = ms(l.lean - all.lean);
+    return Math.abs(d) >= DRIFT_MS ? h('span', { class: `pill ${d < 0 ? 'warn' : 'bad'}` }, d < 0 ? `rushing ${-d} ms` : `dragging ${d} ms`) : null;
+  };
+  const k = feel.kickVsHands;
+  const dyn = feel.dynamics;
+  return h('div', { class: 'feel' },
+    h('h3', null, 'Timing & feel'),
+    h('div', { class: 'mono' }, 'You sit ', leanSpan(all.lean), ` · spread ${ms(all.spread)} ms`),
+    h('div', { class: 'small dim', style: { marginBottom: '8px' } }, 'Sits = your median timing against the chart (ahead = early). Spread = how wide the middle half of your hits lands: smaller is steadier.'),
+    feel.byDrum.length ? h('table', { class: 'leaderboard feel-table' }, head('Drum'), h('tbody', null, ...feel.byDrum.map((d) => row(GROUP_LABEL[d.group], d)))) : null,
+    k ? h('div', { class: 'small', style: { margin: '8px 0' } }, Math.abs(ms(k.gap)) < 3 ? `Kick and hands land together on shared beats (${k.count} beats).` : `On shared beats your kick lands ${Math.abs(ms(k.gap))} ms ${k.gap > 0 ? 'after' : 'before'} your hands (${k.count} beats).`) : null,
+    feel.bySection.length ? h('table', { class: 'leaderboard feel-table' }, head('Section'), h('tbody', null, ...feel.bySection.map((s) => row(h('span', null, s.name, h('span', { class: 'mute' }, ` ${s.first}–${s.last}`)), s, drift(s))))) : null,
+    feel.loosest
+      ? h('div', { class: 'row', style: { marginTop: '10px', gap: '10px' } },
+          h('div', { class: 'small' }, `Loosest 4 bars: ${feel.loosest.first}–${feel.loosest.last}, spread ${ms(feel.loosest.spread)} ms.`),
+          button(`PRACTICE THEM AT ${Math.round(practiceRate * 100)}%`, () => practice(feel.loosest!), 'small'))
+      : null,
+    dyn ? h('div', { class: 'small', style: { marginTop: '8px' } }, `Ghost notes at ${Math.round((dyn.ghost / Math.max(1e-6, dyn.backbeat)) * 100)}% of your backbeat (velocity ${Math.round(dyn.ghost * 127)} against ${Math.round(dyn.backbeat * 127)}; ${dyn.ghosts} ghosts, ${dyn.backbeats} backbeats).`) : null,
+  );
+}
 
 export function resultsScreen(app: App, params?: Record<string, unknown>): Screen {
   const pkg = params?.pkg as SongPackage;
@@ -104,6 +142,7 @@ export function resultsScreen(app: App, params?: Record<string, unknown>): Scree
   const practiceBars = (span: { first: number; last: number }) =>
     app.navigate('game', { pkg, difficulty, mode: 'practice', rate: practiceRate, loop: span, back: params?.back });
   let slipBox: HTMLElement | null = null;
+  const feelParam = params?.feel as Feel | undefined;
   if (stats.some((b) => b.notes)) {
     const cells = stats.map((b) => {
       const acc = barAccuracy(b);
@@ -194,6 +233,7 @@ export function resultsScreen(app: App, params?: Record<string, unknown>): Scree
           'div',
           { class: 'panel' },
           slipBox,
+          feelParam ? feelPanel(feelParam, practiceBars, practiceRate) : null,
           h('h3', { style: slipBox ? {} : { marginTop: 0 } }, `Leaderboard · ${difficulty}`),
           h('table', { class: 'leaderboard' },
             h('thead', null, h('tr', null, h('th', null, '#'), h('th', null, 'Player'), h('th', null, 'Score'), h('th', null, 'Acc'), h('th', null, 'Combo'), h('th', null, 'Date'))),

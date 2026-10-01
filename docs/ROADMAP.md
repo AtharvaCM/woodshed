@@ -37,7 +37,8 @@ Songs-first. Every phase ends with something playable on the TD-07.
 - [x] Hi-hat pedal (44) is its own voice, `hihatPedal`: the left foot, drawn as a chevron at the hi-hat lane's left edge, judged as its own lane and only in charts that have a foot part (dropped on medium/easy). Pad maps saved earlier move 44 off the closed hat. drum2midi writes 44 for quiet hand hats (190 in Labon Ko, most filling gaps in the 16th run), so `transcription-to-song.py` now folds 44 into 42 unless `--keep-pedal-hats`; Labon Ko regenerated (identical chart otherwise; old zip kept as `audio/songs/labon-ko.before-pedal-fold.zip`). Done 2026-09-30.
 - [ ] Read CC#4 in `src/input/midi.ts`: classify half-open hats, expose pedal position to the HUD; calibrate the ~90 closed ceiling per device.
 - [ ] Double-kick stats: inter-onset spacing and evenness for consecutive note-36 hits (both beaters share one note).
-- [ ] Session log to IndexedDB: per take, per section, per voice timing error and velocity spread (the data the coach reads).
+- [x] Timing & feel on the results screen (`src/game/feel.ts`): median lean and interquartile spread overall, per drum and per section (rushing/dragging ±10 ms against the take), kick against the hands on shared beats, the loosest 4 bars, ghost vs backbeat velocity. Done 2026-10-01.
+- [ ] Session log to IndexedDB: per take, per section, per voice timing error and velocity spread (the data the coach reads). `analyseFeel` already computes it per take; store it and chart it over days.
 - [ ] Roland Coach modes in-app: Time Check, Quiet Count, Auto Up/Down, Change Up — with history.
 
 ## Phase 4 — coach

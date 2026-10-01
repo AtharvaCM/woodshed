@@ -398,6 +398,9 @@ body.dragover::after { content: 'DROP SONG ZIP TO IMPORT'; position: fixed; inse
 .plabel { font-size: 10px; letter-spacing: .14em; color: var(--ink-mute); font-weight: 700; margin-right: 4px; }
 .loop-label { font-family: var(--font-mono); font-size: 12px; color: var(--ink-mute); min-width: 38px; text-align: center; }
 .loop-label.on { color: var(--great); }
+.feel .lean.ahead { color: var(--good); }
+.feel .lean.behind { color: var(--kick); }
+.feel .feel-table { margin-top: 6px; }
 .section-label { font-family: var(--font-mono); font-size: 12px; color: var(--ink); min-width: 48px; text-align: center; }
 .pause-overlay .panel { background: var(--bg-2); }
 .pause-overlay .menu .btn .hint kbd { margin-left: 4px; }
