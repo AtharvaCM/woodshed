@@ -45,6 +45,8 @@ export interface RenderState {
   accent?: string;
   /** Named sections (sorted by bar). */
   sections?: readonly SongSection[];
+  /** Quiet Count: inside a quiet stretch that began at chart time `since`; timing cues and feedback hide. */
+  quiet?: { since: number } | null;
 }
 
 /**
@@ -350,10 +352,13 @@ export class HighwayRenderer implements PlayRenderer {
     } else this.shake = 0;
 
     ctx.drawImage(layers.road, 0, 0, w, h);
-    this.drawBeats(state);
+    // Quiet Count: the scrolling notes and beat lines are the timing cue, so they go while the song is out.
+    if (!state.quiet) this.drawBeats(state);
     this.drawReceptors(state, now);
-    this.drawGhosts(state, now);
-    this.drawNotes(state);
+    if (!state.quiet) {
+      this.drawGhosts(state, now);
+      this.drawNotes(state);
+    }
     this.drawParticles(dt);
     this.drawLaneLabels();
     ctx.restore();

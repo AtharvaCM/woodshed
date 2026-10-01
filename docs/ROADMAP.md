@@ -41,7 +41,8 @@ Songs-first. Every phase ends with something playable on the TD-07.
 - [x] Practice log (`src/store/practiceLog.ts`, localStorage, newest 3,000 entries): every loop pass and finished take with its bars, section, speed, hits, lean, spread, kick-vs-hands and ghost ratio. HUD shows the last pass; results chart spread over recent takes and passes. Done 2026-10-01.
 - [x] Tempo ladder (Roland's Auto Up/Down): +5 % after a clean pass (≥ 95 % hit, spread ≤ 20 ms), −5 % after > 20 % missed, 50–100 %. Done 2026-10-01.
 - [ ] Progress over days: chart a song's spread per day (and per section) from the practice log; feed it to the coach.
-- [ ] Roland Coach modes in-app: Time Check, Quiet Count, Auto Up/Down, Change Up — with history.
+- [x] Roland coach modes, part: Quiet Count (`src/game/quiet.ts`; QUIET 4·2 / 4·4 / 8·8 in practice) and Auto Up/Down (the tempo ladder). Done 2026-10-01.
+- [ ] Roland coach modes, rest: Time Check (a click-only mode with a running early/late meter), Change Up (switching subdivisions every few bars).
 
 ## Phase 4 — coach
 

@@ -14,6 +14,7 @@ import type { TimingHit } from '@/game/timingHeatmap';
 import { analyseFeel, type FeelHit } from '@/game/feel';
 import { practiceEntry } from '@/game/history';
 import { ladderStep } from '@/game/ladder';
+import { QUIET_CYCLES, quietLabel, type QuietCycle, type QuietReport } from '@/game/quiet';
 import type { PracticeEntry } from '@/store';
 
 /** Parse the chart file listed for `difficulty`, or null when the package has none. */
@@ -107,6 +108,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
   const modeTag = h('div', { class: 'mode-tag' });
   const timingEl = h('div', { class: 'timing' }, '');
   const passEl = h('div', { class: 'last-pass' }, '');
+  const quietEl = h('div', { class: 'quiet-banner', hidden: true }, 'QUIET — KEEP TIME');
   const barEl = h('div', { class: 'bar-pos' }, '');
   const keyHint = h('div', { class: 'key-hint' });
   const practiceBar = h('div', { class: 'practice-bar' });
@@ -126,6 +128,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     practiceBar,
     timingEl,
     passEl,
+    quietEl,
     keyHint,
     countdownEl,
   );
@@ -141,6 +144,8 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
   let guideDrums = mode === 'practice' ? localStorage.getItem('dk.guideDrums') === '1' : false;
   /** Practice: step the speed up after a clean pass round the loop, down after one that falls apart. */
   let ladder = mode === 'practice' && localStorage.getItem('dk.ladder') === '1';
+  /** Practice: Quiet Count cycle (remembered by its label, e.g. "4·4"), or null. */
+  let quietCycle: QuietCycle | null = mode === 'practice' ? QUIET_CYCLES.find((c) => quietLabel(c) === localStorage.getItem('dk.quiet')) ?? null : null;
   let passes = 0;
   /** Bar downbeats (chart seconds) and the last bar with music in it. */
   let starts: number[] = [];
@@ -271,6 +276,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
         laneOrder: settings.laneOrder,
         view: settings.playView,
         sections,
+        quiet: quietCycle,
         renderScale: settings.renderScale,
         loop: loopBars ? barSpan(loopBars.first, loopBars.last, starts) : null,
       },
@@ -281,12 +287,15 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
           comboEl.animate(COMBO_POP, { duration: 160, easing: 'ease-out' });
           multEl.textContent = `${ev.multiplier}×`;
           multEl.classList.toggle('max', ev.multiplier >= 4);
-          if (ev.kind === 'hit') showJudge(ev.judgement.toUpperCase() + (Math.abs(ev.delta) > 0.02 ? (ev.delta < 0 ? ' ‹' : ' ›') : ''), ev.judgement);
-          else if (ev.kind === 'miss') showJudge('MISS', 'miss');
-          else if (Number.isNaN(ev.delta)) showJudge('OVERHIT', 'miss');
-          else showJudge(`${ev.delta < 0 ? 'EARLY' : 'LATE'} ${Math.round(Math.abs(ev.delta) * 1000)}ms`, 'miss');
           const j = session!.judge;
-          updateTiming();
+          // Quiet Count: no verdicts and no running timing while the song is out; the readout comes after.
+          if (!session!.isQuiet) {
+            if (ev.kind === 'hit') showJudge(ev.judgement.toUpperCase() + (Math.abs(ev.delta) > 0.02 ? (ev.delta < 0 ? ' ‹' : ' ›') : ''), ev.judgement);
+            else if (ev.kind === 'miss') showJudge('MISS', 'miss');
+            else if (Number.isNaN(ev.delta)) showJudge('OVERHIT', 'miss');
+            else showJudge(`${ev.delta < 0 ? 'EARLY' : 'LATE'} ${Math.round(Math.abs(ev.delta) * 1000)}ms`, 'miss');
+            updateTiming();
+          }
           accEl.textContent = `${(j.accuracy * 100).toFixed(1)}%`;
           const ratio = j.maxScore ? j.score / Math.max(1, (j.judgedCount / Math.max(1, j.totalNotes)) * j.maxScore) : 0;
           starsEl.textContent = starString(Math.min(5, Math.round(Math.max(0, Math.min(1, ratio)) * 10) / 2));
@@ -319,6 +328,12 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
         },
         onFrame: () => recorder?.frame(),
         onPass: () => onPass(),
+        onQuiet: (quiet) => {
+          // The grid says so in its own header; the highway has nowhere quiet to say it.
+          quietEl.hidden = !quiet || session?.view !== 'highway';
+          if (!quiet) updateTiming();
+        },
+        onQuietReport: (r) => quietReport(r),
         onFinish: (summary) => finish(summary),
       },
       app.input,
@@ -485,6 +500,36 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     toast(step.why, step.move === 'up' || step.move === 'top' ? 'ok' : step.move === 'down' ? 'bad' : undefined);
   }
 
+  /** How the quiet stretch went: where you sat alone against with the song, and where you had got to by its end. */
+  function quietReport(r: QuietReport): void {
+    const ms = (s: number) => Math.round(s * 1000);
+    const sits = (s: number) => (Math.abs(ms(s)) < 3 ? 'on the beat' : `${Math.abs(ms(s))} ms ${s < 0 ? 'ahead' : 'behind'}`);
+    if (!r.quiet) {
+      passEl.textContent = `QUIET ${r.bars} BARS · ${r.notes - r.missed}/${r.notes} hit`;
+      return;
+    }
+    passEl.textContent = [
+      `QUIET ${r.bars} BARS · sat ${sits(r.quiet.lean)}${r.loud ? ` (with the song ${sits(r.loud.lean)})` : ''}`,
+      `spread ${ms(r.quiet.spread)} ms`,
+      r.lastBar ? `last bar ${sits(r.lastBar.lean)}` : '',
+      r.missed ? `${r.missed} missed` : '',
+    ].filter(Boolean).join(' · ');
+    // Drift: where the last quiet bar (or the stretch) sat against where you sat with the song.
+    const end = (r.lastBar ?? r.quiet).lean - (r.loud?.lean ?? 0);
+    const kept = Math.abs(ms(end)) < 10;
+    toast(kept ? `Kept time alone for ${r.bars} bars (within ${Math.max(1, Math.abs(ms(end)))} ms)` : `Drifted ${Math.abs(ms(end))} ms ${end < 0 ? 'ahead' : 'behind'} over ${r.bars} quiet bars`, kept ? 'ok' : 'bad');
+  }
+
+  /** Off → 4·2 → 4·4 → 8·8 → off. */
+  function cycleQuiet(): void {
+    const i = quietCycle ? QUIET_CYCLES.indexOf(quietCycle) : -1;
+    quietCycle = QUIET_CYCLES[i + 1] ?? null;
+    localStorage.setItem('dk.quiet', quietCycle ? quietLabel(quietCycle) : '');
+    session?.setQuiet(quietCycle);
+    if (quietCycle) toast(`Quiet Count ${quietLabel(quietCycle)}: ${quietCycle.on} bars with the song, ${quietCycle.off} without. Keep time through them.`);
+    refreshPractice();
+  }
+
   function setLadder(on: boolean): void {
     ladder = on;
     localStorage.setItem('dk.ladder', on ? '1' : '0');
@@ -504,6 +549,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     if (!session) return;
     const view = session.view === 'grid' ? 'highway' : 'grid';
     session.setView(view);
+    quietEl.hidden = !(session.isQuiet && view === 'highway');
     app.settingsStore.update({ playView: view });
     refreshPractice();
   }
@@ -515,6 +561,8 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     const clearLoop = button('✕', () => setLoop(null), 'icon small ghost');
     const guideBtn = button('', () => setGuide(!guideDrums), 'icon small');
     const ladderBtn = button('', () => setLadder(!ladder), 'icon small');
+    const quietBtn = button('', cycleQuiet, 'icon small');
+    quietBtn.title = 'Quiet Count: the song drops out for a few bars and you keep time; after each quiet stretch you see where you drifted to.';
     ladderBtn.title = 'After each pass round the loop: 5 % faster when you hit 95 % with a spread of 20 ms or less, 5 % slower when you miss more than 20 %.';
     const viewBtn = button('', toggleView, 'icon small');
     const sectionLabel = h('span', { class: 'section-label' });
@@ -532,6 +580,8 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
       loopBtns.forEach((b, i) => b.classList.toggle('active', !!loopBars && loopBars.last - loopBars.first + 1 === LOOP_LENGTHS[i]));
       guideBtn.textContent = `GUIDE DRUMS ${guideDrums ? 'ON' : 'OFF'}`;
       ladderBtn.textContent = `LADDER ${ladder ? 'ON' : 'OFF'}`;
+      quietBtn.textContent = `QUIET ${quietCycle ? quietLabel(quietCycle) : 'OFF'}`;
+      quietBtn.classList.toggle('active', !!quietCycle);
       ladderBtn.classList.toggle('active', ladder);
       viewBtn.textContent = session?.view === 'highway' ? 'VIEW: HIGHWAY' : 'VIEW: GRID';
       guideBtn.classList.toggle('active', guideDrums);
@@ -551,6 +601,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
       group('LOOP', ...loopBtns, loopLabel, clearLoop),
       guideBtn,
       ladderBtn,
+      quietBtn,
       viewBtn,
     );
     refreshPractice();

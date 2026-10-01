@@ -70,9 +70,19 @@ export class Transport {
     return this._gain;
   }
 
+  /** Set the level now, dropping any change scheduled with {@link setGainAt}. */
   setGain(v: number): void {
     this._gain = clamp(v, 0, 1);
-    if (this.gainNode) this.gainNode.gain.setTargetAtTime(this._gain, this.engine.ctx.currentTime, 0.01);
+    if (!this.gainNode) return;
+    const now = this.engine.ctx.currentTime;
+    this.gainNode.gain.cancelScheduledValues(now);
+    this.gainNode.gain.setTargetAtTime(this._gain, now, 0.01);
+  }
+
+  /** Change the level at an audio-clock time (a bar line), with a 5 ms fade so it does not click. */
+  setGainAt(v: number, audioTime: number): void {
+    this._gain = clamp(v, 0, 1);
+    if (this.gainNode) this.gainNode.gain.setTargetAtTime(this._gain, Math.max(this.engine.ctx.currentTime, audioTime), 0.005);
   }
 
   get segmentStart(): number {
