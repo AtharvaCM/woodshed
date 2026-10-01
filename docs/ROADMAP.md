@@ -38,7 +38,9 @@ Songs-first. Every phase ends with something playable on the TD-07.
 - [ ] Read CC#4 in `src/input/midi.ts`: classify half-open hats, expose pedal position to the HUD; calibrate the ~90 closed ceiling per device.
 - [ ] Double-kick stats: inter-onset spacing and evenness for consecutive note-36 hits (both beaters share one note).
 - [x] Timing & feel on the results screen (`src/game/feel.ts`): median lean and interquartile spread overall, per drum and per section (rushing/dragging ±10 ms against the take), kick against the hands on shared beats, the loosest 4 bars, ghost vs backbeat velocity. Done 2026-10-01.
-- [ ] Session log to IndexedDB: per take, per section, per voice timing error and velocity spread (the data the coach reads). `analyseFeel` already computes it per take; store it and chart it over days.
+- [x] Practice log (`src/store/practiceLog.ts`, localStorage, newest 3,000 entries): every loop pass and finished take with its bars, section, speed, hits, lean, spread, kick-vs-hands and ghost ratio. HUD shows the last pass; results chart spread over recent takes and passes. Done 2026-10-01.
+- [x] Tempo ladder (Roland's Auto Up/Down): +5 % after a clean pass (≥ 95 % hit, spread ≤ 20 ms), −5 % after > 20 % missed, 50–100 %. Done 2026-10-01.
+- [ ] Progress over days: chart a song's spread per day (and per section) from the practice log; feed it to the coach.
 - [ ] Roland Coach modes in-app: Time Check, Quiet Count, Auto Up/Down, Change Up — with history.
 
 ## Phase 4 — coach

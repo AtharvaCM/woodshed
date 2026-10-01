@@ -118,10 +118,14 @@ export function analyseFeel(hits: readonly FeelHit[], starts: readonly number[],
   });
 
   // Widest spread wins; on a tie (within 1 ms) the window that scatters more on average, so four loose bars
-  // beat three loose bars and a tight one.
+  // beat three loose bars and a tight one. Only windows inside the bars actually played: a loop pass, or a
+  // take ended early, must not name bars that were never reached.
   let loosest: Feel['loosest'] = null;
   let loosestScatter = 0;
-  for (let first = 1; first + LOOSE_BARS - 1 <= lastBar; first++) {
+  const played = barOf.filter((b) => b >= 1 && b <= lastBar);
+  const fromBar = played.length ? Math.min(...played) : 1;
+  const toBar = played.length ? Math.max(...played) : 0;
+  for (let first = fromBar; first + LOOSE_BARS - 1 <= toBar; first++) {
     const deltas = inBars(first, first + LOOSE_BARS - 1);
     const l = leanOf(deltas);
     if (!l) continue;

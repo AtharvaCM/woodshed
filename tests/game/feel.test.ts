@@ -51,6 +51,12 @@ describe('feel', () => {
     expect(f.loosest!.spread).toBeGreaterThan(0.04);
   });
 
+  it('the loosest bars are found only inside the bars played', () => {
+    const loop = Array.from({ length: 4 }, (_, i) => groove(i + 9, {}, 10)).flat(); // a loop round bars 9-12
+    expect(analyseFeel(loop, starts, [], 20).loosest).toMatchObject({ first: 9, last: 12 });
+    expect(analyseFeel(groove(9, {}, 10), starts, [], 20).loosest).toBeNull(); // one bar: no four-bar window
+  });
+
   it('compares played ghost notes with backbeats, only with pad velocities', () => {
     const ghosts = Array.from({ length: 6 }, (_, i) => hit(i + 1, 3, 'snare', 0, 0.12, 0.25));
     const backbeats = Array.from({ length: 6 }, (_, i) => hit(i + 1, 4, 'snare', 0, 0.92, 0.8));
