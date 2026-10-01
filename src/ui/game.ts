@@ -12,6 +12,9 @@ import { hitWindowsFor, starString, verdictFor } from '@/game/scoring';
 import { h, button, toast, fmtScore } from './dom';
 import type { TimingHit } from '@/game/timingHeatmap';
 import { analyseFeel, type FeelHit } from '@/game/feel';
+import { practiceEntry } from '@/game/history';
+import { ladderStep } from '@/game/ladder';
+import type { PracticeEntry } from '@/store';
 
 /** Parse the chart file listed for `difficulty`, or null when the package has none. */
 export async function readChart(pkg: SongPackage, difficulty: Difficulty): Promise<Chart | null> {
@@ -103,6 +106,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
   const countdownEl = h('div', { class: 'countdown' });
   const modeTag = h('div', { class: 'mode-tag' });
   const timingEl = h('div', { class: 'timing' }, '');
+  const passEl = h('div', { class: 'last-pass' }, '');
   const barEl = h('div', { class: 'bar-pos' }, '');
   const keyHint = h('div', { class: 'key-hint' });
   const practiceBar = h('div', { class: 'practice-bar' });
@@ -121,6 +125,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     h('div', { class: 'acc-box' }, accEl, starsEl),
     practiceBar,
     timingEl,
+    passEl,
     keyHint,
     countdownEl,
   );
@@ -134,6 +139,9 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
   let pauseOverlay: HTMLElement | null = null;
   let rate = mode === 'practice' ? Number(params?.rate) || Number(localStorage.getItem('dk.practiceRate') ?? 1) || 1 : 1;
   let guideDrums = mode === 'practice' ? localStorage.getItem('dk.guideDrums') === '1' : false;
+  /** Practice: step the speed up after a clean pass round the loop, down after one that falls apart. */
+  let ladder = mode === 'practice' && localStorage.getItem('dk.ladder') === '1';
+  let passes = 0;
   /** Bar downbeats (chart seconds) and the last bar with music in it. */
   let starts: number[] = [];
   let lastBar = 0;
@@ -310,6 +318,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
           countdownEl.textContent = n === null ? '' : String(n);
         },
         onFrame: () => recorder?.frame(),
+        onPass: () => onPass(),
         onFinish: (summary) => finish(summary),
       },
       app.input,
@@ -454,6 +463,35 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     session.setLoop(loopBars ? barSpan(loopBars.first, loopBars.last, starts) : null);
     refreshPractice();
   }
+  /** History entry for the bars just played (a loop pass, or the take), saved to the practice log. */
+  function logEntry(kind: PracticeEntry['kind'], bars: { first: number; last: number }): PracticeEntry | null {
+    if (!session || !starts.length) return null;
+    const entry = practiceEntry({ songId: pkg.meta.id, difficulty, kind, rate, bars, notes: session.judge.notes, starts, sections, lastBar, velocityOf: (i) => session?.playedVelocity(i) });
+    if (entry) app.practiceLog.add(entry);
+    return entry;
+  }
+
+  /** A pass round the loop is done: log it, show it, and let the ladder move the speed. */
+  function onPass(): void {
+    if (!loopBars) return;
+    const entry = logEntry('pass', loopBars);
+    if (!entry || !entry.notes) return;
+    passes++;
+    const lean = entry.all ? ` · sits ${Math.abs(Math.round(entry.all.lean * 1000)) < 3 ? 'on the beat' : `${Math.abs(Math.round(entry.all.lean * 1000))} ms ${entry.all.lean < 0 ? 'ahead' : 'behind'}`} · spread ${Math.round(entry.all.spread * 1000)} ms` : '';
+    passEl.textContent = `PASS ${passes} · ${Math.round((1 - entry.missed / entry.notes) * 100)}% hit${lean} · ${Math.round(rate * 100)}%`;
+    if (!ladder) return;
+    const step = ladderStep(rate, { notes: entry.notes, missed: entry.missed, spread: entry.all?.spread ?? null });
+    if (step.rate !== rate) setRate(step.rate);
+    toast(step.why, step.move === 'up' || step.move === 'top' ? 'ok' : step.move === 'down' ? 'bad' : undefined);
+  }
+
+  function setLadder(on: boolean): void {
+    ladder = on;
+    localStorage.setItem('dk.ladder', on ? '1' : '0');
+    if (on && !loopBars) toast('The ladder moves the speed after each pass round a loop: set a loop (1 2 4 8, or a section)');
+    refreshPractice();
+  }
+
   function setGuide(on: boolean): void {
     guideDrums = on;
     localStorage.setItem('dk.guideDrums', on ? '1' : '0');
@@ -476,6 +514,8 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
     const loopLabel = h('span', { class: 'loop-label' });
     const clearLoop = button('✕', () => setLoop(null), 'icon small ghost');
     const guideBtn = button('', () => setGuide(!guideDrums), 'icon small');
+    const ladderBtn = button('', () => setLadder(!ladder), 'icon small');
+    ladderBtn.title = 'After each pass round the loop: 5 % faster when you hit 95 % with a spread of 20 ms or less, 5 % slower when you miss more than 20 %.';
     const viewBtn = button('', toggleView, 'icon small');
     const sectionLabel = h('span', { class: 'section-label' });
     const loopSectionBtn = button('LOOP', loopSection, 'icon small');
@@ -491,6 +531,8 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
       clearLoop.hidden = !loopBars;
       loopBtns.forEach((b, i) => b.classList.toggle('active', !!loopBars && loopBars.last - loopBars.first + 1 === LOOP_LENGTHS[i]));
       guideBtn.textContent = `GUIDE DRUMS ${guideDrums ? 'ON' : 'OFF'}`;
+      ladderBtn.textContent = `LADDER ${ladder ? 'ON' : 'OFF'}`;
+      ladderBtn.classList.toggle('active', ladder);
       viewBtn.textContent = session?.view === 'highway' ? 'VIEW: HIGHWAY' : 'VIEW: GRID';
       guideBtn.classList.toggle('active', guideDrums);
     };
@@ -508,6 +550,7 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
         : []),
       group('LOOP', ...loopBtns, loopLabel, clearLoop),
       guideBtn,
+      ladderBtn,
       viewBtn,
     );
     refreshPractice();
@@ -604,6 +647,8 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
       .filter((n) => n.state === 'hit' && n.delta !== undefined)
       .map((n) => ({ voice: n.voice, time: n.time, tick: n.tick, delta: n.delta!, chartVelocity: n.velocity, velocity: session?.playedVelocity(n.index) }));
     const feel = analyseFeel(feelHits, starts, sections, lastBar);
+    // Ended mid-loop: that is one more (partial) pass; otherwise the whole take.
+    logEntry(loopBars ? 'pass' : 'take', loopBars ?? { first: 1, last: lastBar });
     app.navigate('results', { pkg, difficulty, mode, summary, rate, timing: session?.judge.timingStats(), hits, windows, video, back: params?.back, bars: { notes, starts, lastBar }, feel });
   }
 

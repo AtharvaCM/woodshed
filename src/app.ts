@@ -1,7 +1,7 @@
 import { AudioEngine, DrumKit } from '@/audio';
 import { InputHub } from '@/input';
 import { SongLibrary, IndexedDbBackend } from '@/song';
-import { ScoreStore, DeviceStore, SettingsStore, localStorageKV } from '@/store';
+import { ScoreStore, DeviceStore, SettingsStore, PracticeLog, localStorageKV } from '@/store';
 import type { DeviceConfig, Settings } from '@/types';
 import { findPreset } from '@/midi';
 import { toast } from '@/ui/dom';
@@ -20,6 +20,7 @@ export class App {
   readonly input: InputHub;
   readonly library = new SongLibrary(new IndexedDbBackend());
   readonly scores: ScoreStore;
+  readonly practiceLog: PracticeLog;
   readonly devices: DeviceStore;
   readonly settingsStore: SettingsStore;
   private screens = new Map<string, ScreenFactory>();
@@ -32,6 +33,7 @@ export class App {
   constructor(readonly root: HTMLElement) {
     const kv = localStorageKV();
     this.scores = new ScoreStore(kv);
+    this.practiceLog = new PracticeLog(kv);
     this.devices = new DeviceStore(kv);
     this.settingsStore = new SettingsStore(kv);
     this.kit = new DrumKit(this.engine);

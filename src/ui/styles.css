@@ -401,6 +401,11 @@ body.dragover::after { content: 'DROP SONG ZIP TO IMPORT'; position: fixed; inse
 .feel .lean.ahead { color: var(--good); }
 .feel .lean.behind { color: var(--kick); }
 .feel .feel-table { margin-top: 6px; }
+.history .history-spark { width: 100%; height: auto; margin: 8px 0 4px; display: block; overflow: visible; }
+.history .history-spark polyline { fill: none; stroke: var(--good); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.history .history-spark circle { fill: var(--good); }
+.history .history-spark circle.take { fill: var(--perfect); }
+.hud .last-pass { position: absolute; bottom: 116px; left: 50%; transform: translateX(-50%); font-family: var(--font-mono); font-size: 13px; color: var(--ink); white-space: nowrap; text-shadow: 0 1px 6px rgba(0,0,0,.8); }
 .section-label { font-family: var(--font-mono); font-size: 12px; color: var(--ink); min-width: 48px; text-align: center; }
 .pause-overlay .panel { background: var(--bg-2); }
 .pause-overlay .menu .btn .hint kbd { margin-left: 4px; }

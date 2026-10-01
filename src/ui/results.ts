@@ -9,6 +9,61 @@ import { attachPadNav, focusList } from './padNav';
 import { hitWindowsFor, starString, verdictFor } from '@/game/scoring';
 import { drawTimingHeatmap, timingSummary, type TimingHit } from '@/game/timingHeatmap';
 import type { DrumGroup, Feel, Lean } from '@/game/feel';
+import type { PracticeEntry } from '@/store';
+
+/** How many recent takes and passes the history panel draws. */
+const HISTORY_SHOWN = 30;
+
+/**
+ * Spread over your recent takes and passes of this song and difficulty, oldest left: a line that should fall
+ * as the part settles in. The last few are listed with their bars, speed, hits and where they sat.
+ */
+function historyPanel(entries: PracticeEntry[]): HTMLElement | null {
+  const timed = entries.filter((e) => e.all).slice(-HISTORY_SHOWN);
+  if (timed.length < 2) return null;
+  const spreads = timed.map((e) => ms(e.all!.spread));
+  const lo = Math.min(...spreads);
+  const hi = Math.max(...spreads);
+  const W = 300;
+  const H = 64;
+  const x = (i: number) => (i / (timed.length - 1)) * W;
+  const y = (v: number) => (hi === lo ? H / 2 : 6 + ((hi - v) / (hi - lo)) * (H - 12));
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.classList.add('history-spark');
+  const line = document.createElementNS(ns, 'polyline');
+  line.setAttribute('points', spreads.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' '));
+  svg.appendChild(line);
+  spreads.forEach((v, i) => {
+    const dot = document.createElementNS(ns, 'circle');
+    dot.setAttribute('cx', x(i).toFixed(1));
+    dot.setAttribute('cy', y(v).toFixed(1));
+    dot.setAttribute('r', i === spreads.length - 1 ? '3.5' : '2');
+    if (timed[i].kind === 'take') dot.classList.add('take');
+    svg.appendChild(dot);
+  });
+  const best = Math.min(...spreads);
+  const label = (e: PracticeEntry) => e.section ?? (e.bars.first === 1 && e.kind === 'take' ? 'whole song' : `bars ${e.bars.first}–${e.bars.last}`);
+  const when = (d: number) => new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const recent = timed.slice(-5).reverse();
+  return h('div', { class: 'history' },
+    h('h3', null, 'Progress'),
+    h('div', { class: 'small dim' }, `Spread over your last ${timed.length} takes and passes at this difficulty (lower is steadier; big dots are whole takes): ${spreads[0]} → ${spreads[spreads.length - 1]} ms, best ${best} ms.`),
+    svg,
+    h('table', { class: 'leaderboard feel-table' },
+      h('thead', null, h('tr', null, h('th', null, 'When'), h('th', null, 'What'), h('th', null, 'Speed'), h('th', null, 'Hit'), h('th', null, 'Sits'), h('th', null, 'Spread'))),
+      h('tbody', null, ...recent.map((e) => h('tr', null,
+        h('td', { class: 'mute' }, when(e.date)),
+        h('td', null, label(e)),
+        h('td', null, `${Math.round(e.rate * 100)}%`),
+        h('td', null, `${Math.round((1 - e.missed / Math.max(1, e.notes)) * 100)}%`),
+        h('td', null, leanSpan(e.all!.lean)),
+        h('td', null, `${ms(e.all!.spread)} ms`),
+      ))),
+    ),
+  );
+}
 
 /** A section this much ahead of or behind the take's overall lean is rushing or dragging. */
 const DRIFT_MS = 10;
@@ -234,6 +289,7 @@ export function resultsScreen(app: App, params?: Record<string, unknown>): Scree
           { class: 'panel' },
           slipBox,
           feelParam ? feelPanel(feelParam, practiceBars, practiceRate) : null,
+          historyPanel(app.practiceLog.list({ songId: pkg.meta.id, difficulty })),
           h('h3', { style: slipBox ? {} : { marginTop: 0 } }, `Leaderboard · ${difficulty}`),
           h('table', { class: 'leaderboard' },
             h('thead', null, h('tr', null, h('th', null, '#'), h('th', null, 'Player'), h('th', null, 'Score'), h('th', null, 'Acc'), h('th', null, 'Combo'), h('th', null, 'Date'))),

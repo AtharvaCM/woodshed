@@ -42,6 +42,8 @@ export interface SessionCallbacks {
   onCountdown?: (n: number | null) => void;
   /** After each highway frame is drawn (used by the video recorder to composite). */
   onFrame?: () => void;
+  /** Practice: a pass round the loop just finished; the judge still holds its notes (the wrap resets them next). */
+  onPass?: () => void;
 }
 
 /**
@@ -301,6 +303,7 @@ export class GameSession {
     if (!this.paused) {
       this.judge.update(this.judgeTime(t));
       if (this.cfg.loop && t >= this.cfg.loop.end) {
+        this.cb.onPass?.();
         this.seek(this.cfg.loop.start);
       }
     }
