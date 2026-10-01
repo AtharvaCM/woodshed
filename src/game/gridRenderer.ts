@@ -222,6 +222,10 @@ export class GridRenderer implements PlayRenderer {
       const end = this.starts[bar];
       const xAt = (t: number) => bx + ((t - start) / (end - start)) * barW;
       text(ctx, `BAR ${bar}`, bx, y0 + 2 * k, mono(11, 700), 'rgba(255,255,255,.7)', 'left', 'top');
+      // Quiet Count: no playhead and no judgement on anything played since the song went out; it all shows
+      // again when the song comes back.
+      const hideFrom = state.quiet ? state.quiet.since : Infinity;
+      if (state.quiet && alpha === 1 && bi === 0) text(ctx, 'QUIET · KEEP TIME', f.width - f.side, y0, mono(15, 800), state.accent ?? '#ffe600', 'right', 'top');
       // a section starting here gets its name beside the bar number
       const section = state.sections?.find((s) => s.bar === bar);
       if (section) text(ctx, section.name.toUpperCase(), bx + 62 * k, y0 + 2 * k, mono(11, 800), state.accent ?? '#ffe600', 'left', 'top');
@@ -242,20 +246,21 @@ export class GridRenderer implements PlayRenderer {
         const n = state.notes[i];
         const r = rowOf(n.voice);
         if (r < 0) continue;
-        const color = n.state === 'hit' && n.judgement ? JUDGE_COLORS[n.judgement] : n.state === 'missed' ? MISS : VOICE_COLORS[n.voice];
-        glyph(ctx, n.voice, xAt(n.time), rowY(r), rowH, k, n.velocity, color, alpha * (n.state === 'missed' ? 0.6 : 1));
+        const judged = n.time < hideFrom - 1e-6;
+        const color = judged && n.state === 'hit' && n.judgement ? JUDGE_COLORS[n.judgement] : judged && n.state === 'missed' ? MISS : VOICE_COLORS[n.voice];
+        glyph(ctx, n.voice, xAt(n.time), rowY(r), rowH, k, n.velocity, color, alpha * (judged && n.state === 'missed' ? 0.6 : 1));
       }
       ctx.globalAlpha = alpha;
       // your strokes: a tick where the stick actually landed, in the judgement's colour
       ctx.lineWidth = 2 * k;
       for (const s of this.strokes) {
-        if (s.time < start || s.time >= end) continue;
+        if (s.time < start || s.time >= end || s.time >= hideFrom - 1e-6) continue;
         const r = rowOf(s.voice);
         if (r < 0) continue;
         ctx.strokeStyle = s.judgement === 'over' ? MISS : JUDGE_COLORS[s.judgement];
         line(ctx, xAt(s.time), top + rowH * r + 2 * k, xAt(s.time), top + rowH * (r + 1) - 2 * k);
       }
-      if (alpha === 1 && state.time >= start && state.time < end) {
+      if (alpha === 1 && !state.quiet && state.time >= start && state.time < end) {
         const x = xAt(state.time);
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 2 * k;

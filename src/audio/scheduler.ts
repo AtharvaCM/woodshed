@@ -81,6 +81,8 @@ export class ChartPlayer {
 
   /** Voices that will not be played (practice mode: the player supplies them). */
   readonly muteVoices = new Set<DrumVoice>();
+  /** Notes at chart times this says yes to are not played (Quiet Count's quiet bars). */
+  skip: ((time: number) => boolean) | null = null;
 
   constructor(
     private readonly engine: AudioEngine,
@@ -157,7 +159,7 @@ export class ChartPlayer {
     const start = lowerBound(this.notes, w.from);
     const { items } = collectWindow(this.notes, start, w.from, w.to);
     for (const n of items) {
-      if (this.muteVoices.has(n.voice)) continue;
+      if (this.muteVoices.has(n.voice) || this.skip?.(n.time)) continue;
       const when = t.audioTimeAtPosition(n.time + this.offset);
       const h = this.kit.trigger(n.voice, n.velocity, when);
       if (h) this.pending.push(h);
