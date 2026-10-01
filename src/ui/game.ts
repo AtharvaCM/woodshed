@@ -11,6 +11,7 @@ import { CAM_ASPECT, VideoRecorder, openCamera, videoRecordingSupported, type Hu
 import { hitWindowsFor, starString, verdictFor } from '@/game/scoring';
 import { h, button, toast, fmtScore } from './dom';
 import type { TimingHit } from '@/game/timingHeatmap';
+import { analyseFeel, type FeelHit } from '@/game/feel';
 
 /** Parse the chart file listed for `difficulty`, or null when the package has none. */
 export async function readChart(pkg: SongPackage, difficulty: Difficulty): Promise<Chart | null> {
@@ -599,7 +600,11 @@ export async function gameScreen(app: App, params?: Record<string, unknown>): Pr
         });
     }
     const notes: BarNote[] = (session?.judge.notes ?? []).map((n) => ({ time: n.time, judgement: n.judgement }));
-    app.navigate('results', { pkg, difficulty, mode, summary, rate, timing: session?.judge.timingStats(), hits, windows, video, back: params?.back, bars: { notes, starts, lastBar } });
+    const feelHits: FeelHit[] = (session?.judge.notes ?? [])
+      .filter((n) => n.state === 'hit' && n.delta !== undefined)
+      .map((n) => ({ voice: n.voice, time: n.time, tick: n.tick, delta: n.delta!, chartVelocity: n.velocity, velocity: session?.playedVelocity(n.index) }));
+    const feel = analyseFeel(feelHits, starts, sections, lastBar);
+    app.navigate('results', { pkg, difficulty, mode, summary, rate, timing: session?.judge.timingStats(), hits, windows, video, back: params?.back, bars: { notes, starts, lastBar }, feel });
   }
 
   const onKey = (e: KeyboardEvent) => {

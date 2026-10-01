@@ -64,6 +64,8 @@ export class GameSession {
   private resizeHandler = () => this.renderer.resize();
   private latencyComp = 0;
   private analyser: AnalyserNode | null = null;
+  /** Velocity of the pad stroke that last hit each note (MIDI only; the keyboard has no dynamics). */
+  private played = new Map<number, number>();
 
   constructor(
     private engine: AudioEngine,
@@ -128,6 +130,11 @@ export class GameSession {
     this.renderer.setAnalyser(this.analyser);
   }
 
+  /** Velocity (0..1) of the pad stroke that hit note `index`, if it came from a MIDI pad. */
+  playedVelocity(index: number): number | undefined {
+    return this.played.get(index);
+  }
+
   get audioDuration(): number {
     return this.cfg.audio.duration;
   }
@@ -156,6 +163,8 @@ export class GameSession {
     this.paused = false;
     this.unsubInput = this.inputSource.onHit((hit) => this.handleHit(hit));
     const from = this.cfg.loop ? this.cfg.loop.start + this.cfg.meta.offset - 1.5 : -countInSeconds;
+    // Starting inside the song: the bars before the loop were never played, so they are not misses.
+    if (this.cfg.loop) this.judge.reseek(this.cfg.loop.start);
     this.transport.play(from);
     this.guide?.start();
     this.transport.onEnded = () => this.onAudioEnded();
@@ -255,6 +264,7 @@ export class GameSession {
     if (t < -0.5 || !this.judge.judges(hit.voice)) return;
     const ev = this.judge.hit(hit.voice, t);
     this.renderer.stroke(ev.voice, t, ev.kind === 'hit' ? ev.judgement : 'over');
+    if (ev.kind === 'hit' && hit.raw) this.played.set(ev.noteIndex, hit.velocity);
   }
 
   private handleJudge(ev: JudgeEvent): void {
