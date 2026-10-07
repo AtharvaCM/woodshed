@@ -51,7 +51,8 @@ def run(cmd, **kw):
 
 
 def fresh(out: Path, *deps: Path) -> bool:
-    return out.exists() and all(out.stat().st_mtime >= d.stat().st_mtime for d in deps)
+    """Built, newer than its inputs, and not empty: a failed ffmpeg run leaves a zero-byte file behind."""
+    return out.exists() and out.stat().st_size > 0 and all(out.stat().st_mtime >= d.stat().st_mtime for d in deps)
 
 
 def tags(path: Path) -> dict:
@@ -278,14 +279,14 @@ def main():
     if a.force or not fresh(no_drums, drums):
         print('2/5 drum-less mix')
         ins = sum((['-i', stems / f'{n}.wav'] for n in ('bass', 'other', 'vocals')), [])
-        run(['ffmpeg', '-v', 'error', '-y', *ins, '-filter_complex', 'amix=inputs=3:normalize=0', '-c:a', 'aac', '-b:a', '192k', no_drums])
+        run(['ffmpeg', '-v', 'error', '-y', *ins, '-filter_complex', 'amix=inputs=3:normalize=0', '-vn', '-c:a', 'aac', '-b:a', '192k', no_drums])
     else:
         print('2/5 drum-less mix: cached')
     with_drums = src
-    if src.suffix.lower() not in ('.m4a', '.mp3', '.aac', '.ogg'):  # don't zip a 60 MB wav
+    if src.suffix.lower() not in ('.m4a', '.mp3', '.aac', '.ogg'):  # don't zip a 60 MB wav or flac; -vn drops embedded cover art
         with_drums = work / 'with-drums.m4a'
         if a.force or not fresh(with_drums, src):
-            run(['ffmpeg', '-v', 'error', '-y', '-i', src, '-c:a', 'aac', '-b:a', '256k', with_drums])
+            run(['ffmpeg', '-v', 'error', '-y', '-i', src, '-vn', '-c:a', 'aac', '-b:a', '256k', with_drums])
 
     # 3. transcription
     midi = work / f'{a.transcriber}.mid'
