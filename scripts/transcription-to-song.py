@@ -12,8 +12,11 @@ the same drum at the same instant after folding and snapping are merged (the lou
 Toms that land on a kick are dropped unless --keep-kick-toms: transcribers read a kick's resonance as a tom
 (drum2midi put 170 of Labon Ko's 189 toms on the kick's own 16ths; the drum stem there is a kick, sub-bass
 60 % against 13 % under the real fills). With --drums-stem the stem decides each one: a tom whose share of
-90–250 Hz against 40–90 Hz is at least TOM_SHARE stays (no lone kick in Labon Ko reached 0.57; real fill toms
-sit around 0.85). Without it, a tom on a kick stays only inside a run of toms (another tom within two 16ths).
+90–250 Hz against 40–90 Hz, read from 30 to 130 ms after the hit (past the beater's click, which is broadband),
+is at least TOM_SHARE stays (no lone kick in Labon Ko reached 0.48; real fill toms sit around 0.92). Without it, a tom on a kick stays only inside a run of toms (another tom within two 16ths).
+
+--lead adds a constant to every note before anything else: transcribers stamp a hit a few ms before its audible
+attack (drum2midi/ADTOF on Labon Ko: hats and snare 4–5 ms). scripts/song-from-audio.py measures it from the stem.
 
   .venv/bin/python scripts/transcription-to-song.py \
       --midi audio/labon-ko-adtof.mid --bpm 108 --offset 0.511 \
@@ -30,6 +33,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument('--midi', required=True)
 ap.add_argument('--bpm', type=float, required=True)
 ap.add_argument('--offset', type=float, required=True, help='audio seconds at chart tick 0 (first downbeat)')
+ap.add_argument('--lead', type=float, default=0.0, help='seconds added to every transcribed note: how far the transcriber stamps hits before their attack')
 ap.add_argument('--audio', required=True, help='drum-less mix')
 ap.add_argument('--audio-with-drums')
 ap.add_argument('--id', required=True)
@@ -53,6 +57,8 @@ a = ap.parse_args()
 
 src = pretty_midi.PrettyMIDI(a.midi)
 notes = sorted((n for inst in src.instruments for n in inst.notes if n.pitch in GM_KEEP), key=lambda n: n.start)
+for n in notes:
+    n.start += a.lead
 dropped = sum(1 for n in notes if n.start < a.offset)
 
 out = pretty_midi.PrettyMIDI(initial_tempo=a.bpm, resolution=480)
@@ -89,9 +95,9 @@ TOM_SHARE = 0.6
 
 
 def tom_share(y, sr, t):
-    """Share of 90–250 Hz (tom body) against 40–90 Hz (kick) in the drum stem, 10 ms before to 90 ms after t."""
+    """Share of 90–250 Hz (tom body) against 40–90 Hz (kick) in the drum stem, 30 to 130 ms after t."""
     import numpy as np
-    a, z = max(0, int((t - 0.01) * sr)), int((t + 0.09) * sr)
+    a, z = max(0, int((t + 0.03) * sr)), int((t + 0.13) * sr)
     seg = y[a:z]
     if len(seg) < 64:
         return 0.0

@@ -51,14 +51,15 @@ Switch `USBDrv` to `VENDOR` and install Roland's driver only when you want the m
 
 ## Getting a song in
 
-Only DRUMKILLER's two synthesized demo songs are bundled. The intended pipeline for a real track with no existing chart:
+Only DRUMKILLER's two synthesized demo songs are bundled. For a real track with no chart, one command takes your own audio file to an importable song zip (needs the audio tooling below):
 
-1. Your own audio file of the song.
-2. Stem separation on the Mac: `demucs-mlx` for the drum stem (seconds on Apple Silicon), upstream `demucs --two-stems=drums` for a drumless backing track.
-3. Drum stem → MIDI with `drum2midi` or `ADTOF-pytorch`.
-4. Make a song folder: `song.json` (title, bpm, offset, `audio`, `charts.expert`), the drumless mix, and the MIDI saved as `expert.mid`. Zip it and drag the zip onto the song list. Then **STUDIO → open it** and fix the chart by ear in the editor. Format: [docs/SONG-FORMAT.md](docs/SONG-FORMAT.md).
+```
+.venv/bin/python scripts/song-from-audio.py "audio/02 Labon Ko.m4a"
+```
 
-Details, tool versions and caveats: [docs/research.md](docs/research.md) §3. Automating steps 2–4 (and a MIDI import button in the Studio) is on the roadmap.
+It separates stems (demucs-mlx), sums bass + other + vocals into the drum-less play-along mix, transcribes the drum stem (drum2midi, or `--transcriber adtof`), measures the tempo, the first downbeat and the transcriber's lead from the hits and the stem, and writes `audio/songs/<id>/` plus `audio/songs/<id>.zip` through `scripts/transcription-to-song.py` (16th-quantized, transcription noise folded or dropped). Title, artist, album and year come from the file's tags. Each step is cached in `audio/work/<id>/`, so a rerun with different options skips the six-minute stem split. It assumes a constant tempo in 4/4 and says so when the hits drift; `--bpm` and `--offset` override what it finds, `--sections` names the sections.
+
+Drag the zip onto the song list, then **STUDIO → open it**, check the offset by ear and fix the chart in the editor. Format: [docs/SONG-FORMAT.md](docs/SONG-FORMAT.md). Details, tool versions and caveats: [docs/research.md](docs/research.md) §3. A MIDI import button in the Studio is on the roadmap.
 
 ### Audio tooling (macOS, Apple Silicon)
 
@@ -73,13 +74,13 @@ git clone --depth 1 https://github.com/miraer/drum2midi.git tools/drum2midi
 ( cd tools/drum2midi && ../../.venv/bin/python setup_env.py --no-render )
 ```
 
-Then:
+The steps one by one, which `scripts/song-from-audio.py` runs for you:
 
 ```
-.venv/bin/demucs-mlx -n htdemucs_ft -o out song.mp3          # drums/bass/other/vocals stems, seconds on M-series
+.venv/bin/demucs-mlx -n htdemucs_ft -o out song.mp3          # out/song/{drums,bass,other,vocals}.wav, minutes on M-series
 .venv/bin/demucs --two-stems=drums -o out song.mp3             # drums.wav + no_drums.wav (the play-along mix)
-.venv/bin/adtof --audio out/htdemucs_ft/song/drums.wav --out song.mid --device cpu   # 5-class MIDI
-.venv/bin/python tools/drum2midi/drum2midi.py out/htdemucs_ft/song/drums.wav -o song.mid   # richer: hat states, crash vs ride, velocities
+.venv/bin/adtof --audio out/song/drums.wav --out song.mid --device cpu   # 5-class MIDI
+.venv/bin/python tools/drum2midi/drum2midi.py out/song/drums.wav -o song.mid   # richer: hat states, crash vs ride, velocities
 ```
 
 `tools/` and `.venv/` are gitignored. Model weights land in `~/.cache`.
